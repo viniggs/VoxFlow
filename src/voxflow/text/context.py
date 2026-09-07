@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,11 +27,18 @@ class AppRule:
 
 
 def get_active_app() -> ActiveApp:
-    user32 = ctypes.windll.user32
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+    user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+    user32.GetWindowTextLengthW.restype = ctypes.c_int
+    user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.GetWindowTextW.restype = ctypes.c_int
     window = user32.GetForegroundWindow()
     if not window:
         return ActiveApp()
-    process_id = ctypes.c_ulong()
+    process_id = wintypes.DWORD()
     user32.GetWindowThreadProcessId(window, ctypes.byref(process_id))
     length = user32.GetWindowTextLengthW(window)
     title_buffer = ctypes.create_unicode_buffer(length + 1)
@@ -48,8 +56,12 @@ def resolve_app_rule(config: AppConfig, app: ActiveApp) -> AppRule:
     terminal_names = {"windowsterminal.exe", "cmd.exe", "powershell.exe", "pwsh.exe"}
     default_strategy = "unicode" if executable in terminal_names else config.inject.strategy
     return AppRule(
-        cleanup_enabled=bool(configured.get("cleanup_enabled", config.cleanup.enabled)),
+        cleanup_enabled=bool(
+            configured.get("cleanup_enabled", configured.get("cleanup", config.cleanup.enabled))
+        ),
         tone=str(configured.get("tone", "technical" if executable in terminal_names else "casual")),
-        inject_strategy=str(configured.get("inject_strategy", default_strategy)),
+        inject_strategy=str(
+            configured.get("inject_strategy", configured.get("inject", default_strategy))
+        ),
         trailing_space=bool(configured.get("trailing_space", config.inject.trailing_space)),
     )

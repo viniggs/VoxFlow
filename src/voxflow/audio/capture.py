@@ -114,18 +114,46 @@ class AudioCapture:
             self._recording = False
             frames = self._recorded
             self._recorded = []
+        return self._build_clip(frames, held_ms)
+
+    def snapshot_recording(self) -> AudioClip | None:
+        """Return a stable copy for UI-only partial transcription."""
+        with self._lock:
+            if not self._recording:
+                return None
+            held_ms = (time.perf_counter() - self._started_at) * 1000
+            frames = [frame.copy() for frame in self._recorded]
+        return self._build_clip(frames, held_ms, log_result=False)
+
+    def current_rms(self) -> float:
+        with self._lock:
+            if not self._recorded:
+                return 0.0
+            recent = self._recorded[-5:]
+            audio = np.concatenate(recent).astype(np.int16, copy=False)
+        normalized = audio.astype(np.float32) / 32768.0
+        return float(np.sqrt(np.mean(np.square(normalized)))) if normalized.size else 0.0
+
+    def _build_clip(
+        self,
+        frames: list[np.ndarray],
+        held_ms: float,
+        *,
+        log_result: bool = True,
+    ) -> AudioClip:
         if not frames:
             return AudioClip(b"", self._sample_rate, held_ms, 0.0, 0.0)
         audio = np.concatenate(frames).astype(np.int16, copy=False)
         normalized = audio.astype(np.float32) / 32768.0
         rms = float(np.sqrt(np.mean(np.square(normalized)))) if normalized.size else 0.0
         audio_ms = audio.size * 1000 / self._sample_rate
-        logger.info(
-            "dictation_recording_stopped held_ms={:.2f} audio_ms={:.2f} rms={:.6f}",
-            held_ms,
-            audio_ms,
-            rms,
-        )
+        if log_result:
+            logger.info(
+                "dictation_recording_stopped held_ms={:.2f} audio_ms={:.2f} rms={:.6f}",
+                held_ms,
+                audio_ms,
+                rms,
+            )
         return AudioClip(audio.tobytes(), self._sample_rate, held_ms, audio_ms, rms)
 
     def _audio_callback(

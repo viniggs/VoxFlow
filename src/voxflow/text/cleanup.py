@@ -26,6 +26,7 @@ class CleanupResult:
     cleanup_ms: float
     provider: str
     fallback_used: bool
+    reason: str = ""
 
 
 class DictationCleaner:
@@ -48,11 +49,13 @@ class DictationCleaner:
         started = time.perf_counter()
         safe_text = expand_snippets(apply_spoken_commands(raw_text), self._config.snippets)
         if not rule.cleanup_enabled:
-            return self._result(safe_text, started, "local", False)
+            return self._result(safe_text, started, "local", False, "disabled")
+        if len(safe_text.split()) < 3:
+            return self._result(safe_text, started, "local", False, "short_text")
         api_key = self._resolve_api_key()
         if not api_key:
             logger.warning("cleanup_raw_fallback reason=missing_opencode_go_key")
-            return self._result(safe_text, started, "raw", True)
+            return self._result(safe_text, started, "raw", True, "missing_key")
 
         models = [self._config.fallback_model]
         if self._config.data_training_consent:
@@ -60,13 +63,14 @@ class DictationCleaner:
         for index, model in enumerate(models):
             try:
                 cleaned = self._request(model, safe_text, app, rule, api_key)
-                return self._result(cleaned, started, model, index > 0)
+                reason = "provider_fallback" if index > 0 else ""
+                return self._result(cleaned, started, model, index > 0, reason)
             except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
                 logger.warning(
                     "cleanup_provider_failed model={} error_type={}", model, type(exc).__name__
                 )
         logger.warning("cleanup_raw_fallback reason=providers_unavailable")
-        return self._result(safe_text, started, "raw", True)
+        return self._result(safe_text, started, "raw", True, "providers_unavailable")
 
     def _request(
         self,
@@ -78,7 +82,7 @@ class DictationCleaner:
     ) -> str:
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "User-Agent": "VoxFlow/0.3.0 Windows dictation",
+            "User-Agent": "VoxFlow/0.4.0 Windows dictation",
             "x-opencode-session": self._session_id,
         }
         prompt = self._system_prompt(app, rule)
@@ -115,7 +119,9 @@ class DictationCleaner:
             "Você é um pós-processador de ditado. Devolva SOMENTE o texto final, sem aspas, "
             "comentários ou resposta ao conteúdo. Remova hesitações e repetições; corrija "
             "pontuação, capitalização e concordância; preserve idioma, significado, termos "
-            f"técnicos e quebras de linha. Aplicativo: {app.executable}. Tom: {rule.tone}. "
+            "técnicos e quebras de linha. Execute comandos falados: nova linha e novo parágrafo "
+            "viram quebras; apaga isso e esquece isso removem o trecho anterior; quer dizer X e "
+            f"não, X corrigem o trecho anterior. Aplicativo: {app.executable}. Tom: {rule.tone}. "
             f"Dicionário: {dictionary}. Snippets: {snippets}. Nunca invente conteúdo."
         )
 
@@ -158,10 +164,17 @@ class DictationCleaner:
         return result
 
     @staticmethod
-    def _result(text: str, started: float, provider: str, fallback: bool) -> CleanupResult:
+    def _result(
+        text: str,
+        started: float,
+        provider: str,
+        fallback: bool,
+        reason: str = "",
+    ) -> CleanupResult:
         return CleanupResult(
             text=text,
             cleanup_ms=(time.perf_counter() - started) * 1000,
             provider=provider,
             fallback_used=fallback,
+            reason=reason,
         )

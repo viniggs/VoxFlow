@@ -1,4 +1,10 @@
-from voxflow.text.inject import ClipboardInjector
+import ctypes
+
+from voxflow.text.inject import INPUT, ClipboardInjector
+
+
+def test_win32_input_structure_has_native_size() -> None:
+    assert ctypes.sizeof(INPUT) == (40 if ctypes.sizeof(ctypes.c_void_p) == 8 else 28)
 
 
 class FakeClipboard:

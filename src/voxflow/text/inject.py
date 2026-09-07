@@ -29,13 +29,47 @@ class KEYBDINPUT(ctypes.Structure):
     ]
 
 
+class MOUSEINPUT(ctypes.Structure):
+    _fields_ = [
+        ("dx", wintypes.LONG),
+        ("dy", wintypes.LONG),
+        ("mouseData", wintypes.DWORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ULONG_PTR),
+    ]
+
+
+class HARDWAREINPUT(ctypes.Structure):
+    _fields_ = [
+        ("uMsg", wintypes.DWORD),
+        ("wParamL", wintypes.WORD),
+        ("wParamH", wintypes.WORD),
+    ]
+
+
 class INPUT_UNION(ctypes.Union):
-    _fields_ = [("ki", KEYBDINPUT)]
+    # INPUT is a union of all three Win32 input structures. Omitting MOUSEINPUT
+    # makes sizeof(INPUT) 32 instead of 40 on x64 and SendInput returns ERROR_INVALID_PARAMETER.
+    _fields_ = [("mi", MOUSEINPUT), ("ki", KEYBDINPUT), ("hi", HARDWAREINPUT)]
 
 
 class INPUT(ctypes.Structure):
     _anonymous_ = ("union",)
     _fields_ = [("type", wintypes.DWORD), ("union", INPUT_UNION)]
+
+
+_user32 = ctypes.WinDLL("user32", use_last_error=True)
+_user32.SendInput.argtypes = [wintypes.UINT, ctypes.POINTER(INPUT), ctypes.c_int]
+_user32.SendInput.restype = wintypes.UINT
+
+
+def _send_inputs(inputs: ctypes.Array[INPUT]) -> None:
+    ctypes.set_last_error(0)
+    sent = _user32.SendInput(len(inputs), inputs, ctypes.sizeof(INPUT))
+    if sent != len(inputs):
+        error_code = ctypes.get_last_error()
+        raise ctypes.WinError(error_code or 1)
 
 
 def send_ctrl_v() -> None:
@@ -45,12 +79,7 @@ def send_ctrl_v() -> None:
         INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(VK_V, 0, KEYEVENTF_KEYUP, 0, 0)),
         INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0, 0)),
     )
-    send_input = ctypes.windll.user32.SendInput
-    send_input.argtypes = [wintypes.UINT, ctypes.POINTER(INPUT), ctypes.c_int]
-    send_input.restype = wintypes.UINT
-    sent = send_input(len(inputs), inputs, ctypes.sizeof(INPUT))
-    if sent != len(inputs):
-        raise ctypes.WinError()
+    _send_inputs(inputs)
 
 
 def send_unicode_text(text: str) -> None:
@@ -69,10 +98,7 @@ def send_unicode_text(text: str) -> None:
             type=INPUT_KEYBOARD,
             ki=KEYBDINPUT(0, unit, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, 0, 0),
         )
-    send_input = ctypes.windll.user32.SendInput
-    sent = send_input(len(inputs), inputs, ctypes.sizeof(INPUT))
-    if sent != len(inputs):
-        raise ctypes.WinError()
+    _send_inputs(inputs)
 
 
 class ClipboardInjector:

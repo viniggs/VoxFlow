@@ -19,6 +19,7 @@ VK_CONTROL = 0x11
 VK_LCONTROL = 0xA2
 VK_RCONTROL = 0xA3
 VK_ADD = 0x6B
+VK_ESCAPE = 0x1B
 HC_ACTION = 0
 
 
@@ -36,9 +37,15 @@ HOOKPROC = ctypes.WINFUNCTYPE(wintypes.LPARAM, ctypes.c_int, wintypes.WPARAM, wi
 
 
 class NativeHoldHotkey:
-    def __init__(self, on_press: Callable[[], None], on_release: Callable[[], None]) -> None:
+    def __init__(
+        self,
+        on_press: Callable[[], None],
+        on_release: Callable[[], None],
+        on_cancel: Callable[[], None] | None = None,
+    ) -> None:
         self._on_press = on_press
         self._on_release = on_release
+        self._on_cancel = on_cancel
         self._thread: threading.Thread | None = None
         self._thread_id = 0
         self._hook: int | None = None
@@ -119,6 +126,13 @@ class NativeHoldHotkey:
                     except Exception:
                         logger.exception("hotkey_release_callback_failed")
                     return 1
+            if data.vkCode == VK_ESCAPE and is_down and self._combo_down:
+                if self._on_cancel is not None:
+                    try:
+                        self._on_cancel()
+                    except Exception:
+                        logger.exception("hotkey_cancel_callback_failed")
+                return 1
             return user32.CallNextHookEx(self._hook, code, message, data_pointer)
 
         self._callback_ref = callback

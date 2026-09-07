@@ -1,11 +1,11 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "0.2.0"
+  #define MyAppVersion "0.4.0"
 #endif
 #ifndef BuildRoot
   #define BuildRoot "..\\dist\\VoxFlow"
 #endif
 #ifndef MyAppPhase
-  #define MyAppPhase "0"
+  #define MyAppPhase "3"
 #endif
 #ifndef OutputRoot
   #define OutputRoot "..\\releases\\fase-" + MyAppPhase

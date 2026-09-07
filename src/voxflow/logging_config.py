@@ -22,7 +22,7 @@ def configure_logging(log_dir: Path, *, console: bool = False) -> Path:
         rotation="10 MB",
         retention="14 days",
         compression="zip",
-        enqueue=True,
+        enqueue=False,
         backtrace=False,
         diagnose=False,
     )

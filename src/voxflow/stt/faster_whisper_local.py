@@ -37,13 +37,16 @@ class FasterWhisperLocalProvider:
         self._dll_handles: list[Any] = []
 
     def _resolve_model_path(self) -> str:
+        model_file = self._model_cache / "model.bin"
+        if os.path.isfile(str(model_file)) and not os.path.islink(str(model_file)):
+            return str(self._model_cache)
+
         trusted_root = self._trusted_model_root()
         trusted_model = trusted_root / "model.bin"
         if self._trusted_model_is_ready(trusted_model):
             return str(trusted_root)
 
-        model_file = self._model_cache / "model.bin"
-        if os.path.isfile(str(model_file)) or os.path.islink(str(model_file)):
+        if os.path.islink(str(model_file)):
             return str(self._materialize_symlinks(self._model_cache))
         snapshots = self._model_cache / "snapshots"
         if os.path.isdir(str(snapshots)):
@@ -168,6 +171,24 @@ class FasterWhisperLocalProvider:
         sample_rate: int,
         language_hint: str = "auto",
     ) -> Transcript:
+        return self._transcribe(pcm16, sample_rate, language_hint, preview=False)
+
+    def transcribe_preview(
+        self,
+        pcm16: bytes,
+        sample_rate: int,
+        language_hint: str = "auto",
+    ) -> Transcript:
+        return self._transcribe(pcm16, sample_rate, language_hint, preview=True)
+
+    def _transcribe(
+        self,
+        pcm16: bytes,
+        sample_rate: int,
+        language_hint: str,
+        *,
+        preview: bool,
+    ) -> Transcript:
         if sample_rate != 16_000:
             raise ValueError(f"sample rate não suportado nesta fase: {sample_rate}")
         self.warmup()
@@ -189,12 +210,13 @@ class FasterWhisperLocalProvider:
             self._active_device = "cpu"
             text, detected_language = self._run_inference(audio, language)
         elapsed_ms = (time.perf_counter() - started) * 1000
-        logger.info(
-            "stt_completed provider=faster_whisper language={} stt_ms={:.2f} chars={}",
-            detected_language,
-            elapsed_ms,
-            len(text),
-        )
+        if not preview:
+            logger.info(
+                "stt_completed provider=faster_whisper language={} stt_ms={:.2f} chars={}",
+                detected_language,
+                elapsed_ms,
+                len(text),
+            )
         return Transcript(text=text, language=detected_language, stt_ms=elapsed_ms)
 
     def _run_inference(

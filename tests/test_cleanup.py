@@ -41,10 +41,26 @@ def test_muse_timeout_falls_back_to_deepseek() -> None:
     )
     rule = AppRule(True, "casual", "clipboard", True)
 
-    result = cleaner.clean("texto bruto", ActiveApp(executable="notepad.exe"), rule)
+    result = cleaner.clean("um texto bruto", ActiveApp(executable="notepad.exe"), rule)
 
     assert result.text == "Texto limpo."
     assert result.provider == "deepseek-v4-flash"
     assert result.fallback_used is True
     assert client.urls[0].endswith("/responses")
     assert client.urls[1].endswith("/chat/completions")
+
+
+def test_short_text_skips_remote_cleanup() -> None:
+    client = FakeClient()
+    cleaner = DictationCleaner(
+        CleanupConfig(data_training_consent=True),
+        secrets=FakeSecrets(),  # type: ignore[arg-type]
+        client=client,  # type: ignore[arg-type]
+    )
+    rule = AppRule(True, "casual", "clipboard", True)
+
+    result = cleaner.clean("bom dia", ActiveApp(executable="notepad.exe"), rule)
+
+    assert result.provider == "local"
+    assert result.reason == "short_text"
+    assert client.urls == []

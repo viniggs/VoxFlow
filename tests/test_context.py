@@ -18,3 +18,14 @@ def test_per_app_rule_overrides_defaults() -> None:
 
     assert rule.tone == "formal"
     assert rule.trailing_space is False
+
+
+def test_documented_per_app_aliases_are_supported() -> None:
+    config = AppConfig.model_validate(
+        {"cleanup": {"per_app": {"notepad.exe": {"cleanup": False, "inject": "unicode"}}}}
+    )
+
+    rule = resolve_app_rule(config, ActiveApp(executable="notepad.exe"))
+
+    assert rule.cleanup_enabled is False
+    assert rule.inject_strategy == "unicode"

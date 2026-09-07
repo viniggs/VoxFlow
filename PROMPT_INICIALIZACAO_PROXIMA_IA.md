@@ -30,18 +30,16 @@ no Windows Credential Manager. O instalador é por usuário, sem certificado, e 
 onedir + Inno Setup.
 
 Contexto essencial: o usuário quer uma experiência visual verificável e não aceita mais uma
-caixa-preta. A janela de acompanhamento deve mostrar estado, preview da transcrição enquanto o
-atalho está pressionado, texto final, métricas e erros; o tray precisa permitir reabrir e
-encerrar. “Tempo real” aqui significa apenas o preview na UI: nunca injete parciais no Notepad,
-Chrome ou outro aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa
-visibilidade em todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco
-horas é crítico.
+caixa-preta. A versão 0.4.0 implementa preview parcial na janela e no overlay enquanto o atalho
+está pressionado, além de indicar Muse, DeepSeek ou bruto e o motivo do fallback. “Tempo real”
+aqui significa apenas o preview na UI: nunca injete parciais no Notepad, Chrome ou outro
+aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa visibilidade em
+todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco horas é crítico.
 
-A última build apresentou `WinError 448` ao carregar o `model.bin` simbólico do cache Hugging
-Face. A correção mais recente materializa o snapshot em `%LOCALAPPDATA%\VoxFlow\models\` e
-precisa ser instalada/testada; não trate a Fase 2 como aceita até o ditado funcionar. Ela também
-rejeita um `model.bin` incompleto deixado por tentativa anterior.
+A versão 0.4.0 corrige o `WinError 87` do `SendInput` x64 e o `WinError 448` do modelo simbólico.
+Ela precisa de aceite manual no Bloco de Notas/Chrome antes da Fase 4. Em teste real, Muse deu
+timeout e DeepSeek V4 Flash respondeu corretamente; a UI agora torna essa rota explícita.
 
-Ao assumir, confirme primeiro se a entrega emergencial de UI descrita no `CONTINUITY.md` foi
-instalada e aceita. Se houver erro, leia o painel e `%LOCALAPPDATA%\VoxFlow\logs\voxflow.log`,
-corrija apenas a causa concreta e regenere a entrega. Não avance para a próxima fase sem OK.
+Ao assumir, confirme primeiro se a entrega 0.4.0/Fase 3 descrita no `CONTINUITY.md` foi instalada
+e aceita. Se houver erro, leia o painel e `%LOCALAPPDATA%\VoxFlow\logs\voxflow.log`, corrija
+apenas a causa concreta e regenere a entrega. Não avance para a Fase 4 sem OK.

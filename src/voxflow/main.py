@@ -1,4 +1,4 @@
-"""VoxFlow command-line bootstrap for Phase 0."""
+"""VoxFlow command-line and desktop bootstrap."""
 
 from __future__ import annotations
 
@@ -53,7 +53,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     from voxflow.app import VoxFlowController
     from voxflow.single_instance import InstanceGuard
-    from voxflow.ui.status_window import StatusWindow, TrayController
+    from voxflow.storage import HistoryStore
+    from voxflow.ui.history import HistoryWindow
+    from voxflow.ui.overlay import DictationOverlay
+    from voxflow.ui.settings import SettingsWindow
+    from voxflow.ui.status_window import StatusWindow
+    from voxflow.ui.tray import TrayController
 
     guard = InstanceGuard()
     if guard.already_running:
@@ -64,9 +69,47 @@ def main(argv: Sequence[str] | None = None) -> int:
     application.setQuitOnLastWindowClosed(False)
     application.setApplicationName("VoxFlow")
     application.setApplicationVersion(__version__)
-    controller = VoxFlowController(config)
+    application.setStyle("Fusion")
+    application.setStyleSheet(
+        "QWidget { background: #111318; color: #eef1f6; font-size: 13px; }"
+        "QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox, "
+        "QTableWidget { background: #181c24; border: 1px solid #303846; "
+        "border-radius: 5px; padding: 5px; }"
+        "QPushButton { background: #2878d0; border: 0; border-radius: 5px; "
+        "padding: 7px 11px; }"
+        "QPushButton:hover { background: #3494ef; }"
+        "QTabBar::tab { background: #202735; padding: 8px 14px; margin-right: 2px; }"
+        "QTabBar::tab:selected { background: #2878d0; }"
+    )
+    history_store = HistoryStore(paths.data_dir / "history.sqlite3")
+    controller = VoxFlowController(config, history_store)
     window = StatusWindow(controller.signals, paths.log_dir)
-    tray = TrayController(application, window)
+    overlay = DictationOverlay()
+    history_window = HistoryWindow(history_store)
+    settings_window = SettingsWindow(config, paths)
+    tray = TrayController(application, window, config.audio.input_device)
+    controller.signals.dictation_started.connect(window.begin_dictation)
+    controller.signals.dictation_started.connect(overlay.begin)
+    controller.signals.preview_changed.connect(
+        lambda text: window.set_transcript(text, "")
+    )
+    controller.signals.preview_changed.connect(overlay.set_preview)
+    controller.signals.recording_level_changed.connect(overlay.set_level)
+    controller.signals.overlay_stage_changed.connect(overlay.set_stage)
+    controller.signals.dictation_finished.connect(
+        lambda message: overlay.fail(message)
+        if message.startswith("Erro:")
+        else overlay.finish(message)
+    )
+    controller.signals.status_changed.connect(tray.set_status)
+    controller.signals.history_changed.connect(history_window.refresh)
+    settings_window.saved.connect(controller.apply_config)
+    settings_window.history_requested.connect(history_window.show_and_refresh)
+    tray.settings_requested.connect(settings_window.show_tab)
+    tray.history_requested.connect(history_window.show_and_refresh)
+    tray.microphone_selected.connect(settings_window.set_microphone)
+    tray.autostart_changed.connect(settings_window.set_autostart_enabled)
+    overlay.cancel_requested.connect(controller.cancel_dictation)
     tray.quit_requested.connect(application.quit)
     window.show()
     try:

@@ -19,10 +19,13 @@ def test_capture_keeps_preroll_and_recording() -> None:
     capture._started_at = time.perf_counter() - 0.5
     capture._audio_callback(frame, 320, None, None)
 
+    preview = capture.snapshot_recording()
+
     clip = capture.stop_recording()
 
+    assert preview is not None
+    assert preview.audio_ms == 40
     assert clip is not None
     assert len(clip.pcm16) == 320 * 2 * 2
     assert clip.held_ms >= 400
     assert clip.rms > 0
-

@@ -1,8 +1,8 @@
 # VoxFlow — Continuidade do projeto
 
-Atualizado em: 2026-09-06  
-Versão: 0.3.0  
-Fase concluída no código: Fase 2 com UI emergencial de diagnóstico, aguardando aceite manual
+Atualizado em: 2026-09-07
+Versão: 0.4.0
+Fase concluída no código: Fase 3, aguardando aceite manual
 
 ## Objetivo
 
@@ -72,7 +72,7 @@ explicitamente dispensado pelo usuário e permanece não testado.
 
 Aceite manual recebido em 2026-09-06. Ditado/STT e velocidade aprovados. O usuário
 identificou que precisava pressionar `Ctrl+V`; ausência de `inject_ms` confirmou falha da
-injeção automática, corrigida na Fase 2 com fallback Unicode.
+injeção automática, corrigida definitivamente na Fase 3 com a estrutura Win32 x64 completa.
 
 ## Fase 2 implementada
 
@@ -101,8 +101,7 @@ Para remover a caixa-preta, foi adicionada uma janela visível ao iniciar com:
 - ícone de bandeja com ações para reabrir a janela e encerrar o VoxFlow.
 
 `main.py` agora usa `QApplication` e mantém a interface disponível inclusive quando a
-inicialização do pipeline falha. A entrega precisa ser instalada e testada manualmente antes
-de considerar a Fase 2 aceita.
+inicialização do pipeline falha. Essa interface foi incorporada e ampliada na Fase 3.
 
 Feedback de 2026-09-07: a UI funcionou, mas o STT falhou com `WinError 448` porque os arquivos
 do snapshot Hugging Face são links simbólicos e o Windows bloqueou a travessia do ponto de
@@ -118,16 +117,43 @@ físico não tem tamanho plausível. O provider foi verificado contra o cache re
 
 Importante: o usuário esclareceu que “escrita em tempo real” significa somente o preview dentro
 da UI do VoxFlow, não texto sendo inserido no Notepad/Chrome enquanto fala. A injeção no aplicativo
-ativo deve ocorrer apenas após soltar o atalho. A build atual ainda é batch e só mostra a
-transcrição após soltar; a próxima IA deve implementar transcrição parcial/chunked na UI sem
-injetar parciais no aplicativo ativo. Não afirmar que isso já está pronto.
+ativo deve ocorrer apenas após soltar o atalho. A versão 0.4.0 implementa esse preview por
+retranscrição periódica do áudio acumulado, em blocos de aproximadamente 900 ms, sem injetar
+nenhum parcial no aplicativo ativo.
+
+## Correções incorporadas na Fase 3
+
+- `WinError 87` na inserção foi causado pela estrutura Win32 `INPUT` incompleta: sem
+  `MOUSEINPUT`, `sizeof(INPUT)` era 32 em x64, mas `SendInput` exige 40. A união agora contém
+  `MOUSEINPUT`, `KEYBDINPUT` e `HARDWAREINPUT`, com assinatura nativa e erro preservado.
+- A janela ativa e o posicionamento do overlay agora declaram corretamente `HWND` de 64 bits.
+- O preview parcial é gerado aproximadamente a cada 900 ms a partir de snapshots do áudio em
+  gravação, no mesmo worker serial do STT. Ele aparece somente na UI/overlay; nunca é injetado.
+- A interface mostra provider da limpeza, se houve fallback, motivo e se o texto mudou.
+- Verificação real em 2026-09-07: Muse expirou após o timeout configurado; DeepSeek V4 Flash
+  respondeu, removeu hesitação/repetição e pontuou corretamente a frase artificial de teste.
+- Regras por aplicativo aceitam tanto os nomes internos `cleanup_enabled`/`inject_strategy`
+  quanto os nomes documentados `cleanup`/`inject`.
+- Logs passaram a gravar imediatamente, sem fila assíncrona que ocultava eventos da build.
+
+## Fase 3 implementada
+
+- Tray com status, modo, seleção de microfone, autostart, histórico, configurações e saída.
+- Overlay inferior no monitor da janela ativa, com estado, nível do microfone, preview e cancelar.
+- Configurações gráficas em abas Geral, Áudio, STT, Texto, Hermes e Histórico; segredos continuam
+  fora do YAML. Mudanças de áudio/modelo exigem reiniciar; texto e preferências simples são
+  aplicadas em execução quando o controlador está ocioso.
+- Histórico SQLite local em `%LOCALAPPDATA%\VoxFlow\history.sqlite3`, com busca, cópia e limpeza.
+- Autostart gerenciável pela UI via HKCU e sons não bloqueantes para início/fim/erro/cancelamento.
+- `Esc` e o botão do overlay cancelam um ditado em gravação.
+- Testes automatizados: Ruff aprovado e 21 testes aprovados em 2026-09-07.
 
 O prompt pronto para a próxima IA está em `PROMPT_INICIALIZACAO_PROXIMA_IA.md`.
 
 ## Próxima fase — somente após OK do usuário
 
-Fase 3: tray, overlay, settings, histórico SQLite, autostart e sons. Não iniciar antes
-do aceite manual da Fase 2.
+Fase 4: cliente Hermes SSE, TTS por sentença, hands-free VAD, barge-in, half-duplex e painel
+de resposta. Não iniciar antes do aceite manual da versão 0.4.0/Fase 3.
 
 ## Restrições
 
