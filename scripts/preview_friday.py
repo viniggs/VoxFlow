@@ -12,6 +12,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton, QWidget
 
+from voxflow.ui.conversation import ConversationOverlay
 from voxflow.ui.status_window import StatusWindow
 from voxflow.ui.theme import VisualState
 
@@ -27,8 +28,15 @@ class PreviewSignals(QObject):
 def main() -> None:
     app = QApplication.instance() or QApplication(sys.argv)
     signals = PreviewSignals()
-    window = StatusWindow(signals, Path('build/friday-preview'))
-    window.resize(900, 900)
+    conversation = '--conversation' in sys.argv
+    if conversation:
+        window = ConversationOverlay('pt-BR-ThalitaMultilingualNeural')
+        window.resize(470, 800)
+        window.set_heard('Friday, as ondas acompanham a minha voz?')
+        window.append_delta('Sim. Elas sobem e descem com a intensidade da fala.')
+    else:
+        window = StatusWindow(signals, Path('build/friday-preview'))
+        window.resize(900, 900)
     controls = QWidget()
     controls.setWindowTitle('Friday — prévia visual (áudio simulado)')
     layout = QHBoxLayout(controls)
@@ -39,9 +47,12 @@ def main() -> None:
 
     def select(state: VisualState) -> None:
         window._orb.set_state(state)
-        window.set_cosmic_state(state)
-        window._status.setText(labels[state])
-        window._live.setText('A Friday está aqui com você.')
+        if conversation:
+            window.set_state('off' if state == VisualState.IDLE else state.value, '')
+        else:
+            window.set_cosmic_state(state)
+            window._status.setText(labels[state])
+            window._live.setText('A Friday está aqui com você.')
 
     for state, label in labels.items():
         button = QPushButton(label)
@@ -56,11 +67,11 @@ def main() -> None:
         for state in labels:
             select(state)
             window._orb.advance(1.2)
-            window.cosmos.advance(1.2)
+            window._cosmos.advance(1.2)
             window._orb.set_amplitude(0.55 if state == VisualState.SPEAKING else 0.0)
-            window.on_frame(0.12)
+            window._orb.advance(0.12)
             app.processEvents()
-            window.grab().save(str(output / f'{state.value}.png'))
+            window.grab().save(str(output / f'{"f9-" if conversation else ""}{state.value}.png'))
         from voxflow.ui.gpu import _CORE, _RAY_RENDERER
         assert _CORE._ready and not _CORE._failed, 'Orb GPU render failed'
         assert _RAY_RENDERER._ready and not _RAY_RENDERER._failed, 'Ray GPU render failed'
@@ -76,7 +87,7 @@ def main() -> None:
         voiced = window._orb.state in (VisualState.SPEAKING, VisualState.LISTENING)
         level = max(0.0, math.sin(elapsed * 2.3)) * (0.4 + 0.4 * math.sin(elapsed * 9)**2)
         window._orb.set_amplitude(level if voiced else 0.0)
-        window.set_cosmic_amplitude(level if voiced else 0.0)
+        window._cosmos.set_amplitude(level if voiced else 0.0)
 
     timer = QTimer()
     timer.timeout.connect(animate)

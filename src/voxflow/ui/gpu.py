@@ -270,6 +270,18 @@ uniform float uTime;
 uniform float uAmplitude;
 uniform float uSize;
 uniform vec4 uMotion;
+uniform vec3 uHover;
+uniform vec2 uVoice0;
+uniform vec2 uVoice1;
+uniform vec2 uVoice2;
+uniform vec2 uVoice3;
+uniform float uClock;
+float voiceWave(vec3 normal, vec2 pulse) {
+    float distance = acos(clamp(dot(normal, normalize(vec3(0.25,-0.65,-1.0))),-1.0,1.0));
+    float travel = distance - pulse.x * 2.1;
+    return pulse.y * sin(travel * 16.0) * exp(-travel*travel / 0.22)
+        * exp(-pulse.x * 1.1);
+}
 void main() {
     int bead = gl_VertexID / 6;
     int ring = bead / 224;
@@ -292,7 +304,10 @@ void main() {
                + 0.30 * sin(dot(normal, vec3(-0.3,1.0,0.8))*frequency*1.45+uTime*0.73)
                + 0.18 * sin(dot(normal, vec3(0.8,-0.4,1.0))*frequency*1.9-uTime*0.51);
     float swell = uMotion.x + uAmplitude * uMotion.y;
-    float radius = 0.88 * (1.0 + swell * wave + uAmplitude * 0.008);
+    float sound = voiceWave(normal,uVoice0) + voiceWave(normal,uVoice1)
+                + voiceWave(normal,uVoice2) + voiceWave(normal,uVoice3);
+    float radius = 0.88 * (1.0 + swell * wave + uAmplitude * 0.008
+        + clamp(sound * 0.035,-0.045,0.045));
     // A bounded tangential current bends the rows into liquid ribbons.
     vec3 current = vec3(normal.y*normal.z, -normal.x*normal.z, normal.x*normal.y);
     vec3 pos = radius * normalize(normal + current * sin(uTime*0.38) * 0.025);
@@ -300,8 +315,17 @@ void main() {
     pos.yz = mat2(0.9563,-0.2924,0.2924,0.9563) * pos.yz;
     float depth = clamp(0.5 - pos.z / 1.9, 0.0, 1.0);
     vec2 projected = pos.xy * 1.95 / ((3.0 + pos.z) * 1.02);
+    vec2 offset = projected - uHover.xy;
+    float distance = length(offset);
+    float front = smoothstep(0.30,0.68,depth);
+    float influence = exp(-distance*distance*22.0) * uHover.z * front;
+    // A local dimple and gentle circular ripples follow the finger-like cursor.
+    float touch = influence * (0.018 + 0.013*sin(distance*42.0-uClock*3.8));
+    pos *= 1.0 + touch;
+    projected = pos.xy * 1.95 / ((3.0 + pos.z) * 1.02);
+    projected -= offset * influence * 0.055;
     pearlDepth = depth;
-    pearlCrest = 0.5 + 0.5 * wave;
+    pearlCrest = clamp(0.5 + 0.5*wave + 0.28*abs(sound) + 0.20*influence,0.0,1.0);
     float reach = max(0.85, uSize * 0.0027) * (0.72 + 0.28 * depth);
     gl_Position = vec4(projected + pearlUV * reach * 2.0 / uSize, 0, 1);
 }
@@ -385,6 +409,9 @@ class _ShaderCore:
         self._pearls: QOpenGLShaderProgram | None = None
         self._motion = (0.018, 0.0, 0.0, 2.0)
         self._phase = 0.0
+        self._hover = (0.0, 0.0, 0.0)
+        self._voice_waves: tuple[tuple[float, float], ...] = ()
+        self._clock = 0.0
 
     # ------------------------------------------------------------------ Setup
 
@@ -531,6 +558,11 @@ class _ShaderCore:
         program.setUniformValue1f("uSize", float(self._size))
         program.setUniformValue1f("uAmplitude", float(amplitude))
         program.setUniformValue("uMotion", QVector4D(*self._motion))
+        program.setUniformValue("uHover", QVector3D(*self._hover))
+        program.setUniformValue1f("uClock", float(self._clock))
+        for index in range(4):
+            pulse = self._voice_waves[index] if index < len(self._voice_waves) else (0.0, 0.0)
+            program.setUniformValue(f"uVoice{index}", QVector2D(*pulse))
         program.setUniformValue("uMid", _vector(palette.core))
         program.setUniformValue("uHot", _vector(palette.core, whiten=0.94))
         functions.glDrawArrays(_GL_TRIANGLES, 0, 112 * 224 * 6)
@@ -637,9 +669,14 @@ def render_orb(
     amplitude: float,
     motion: tuple[float, float, float, float] = (0.018, 0.0, 0.0, 2.0),
     phase: float = 0.0,
+    hover: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    voice_waves: tuple[tuple[float, float], ...] = (),
 ) -> QImage | None:
     """Render one whole orb — core and mote shell — or ``None`` without a GPU."""
 
     _CORE._motion = motion
     _CORE._phase = phase
+    _CORE._hover = hover
+    _CORE._voice_waves = voice_waves
+    _CORE._clock = seconds
     return _CORE.render(size, palette, seconds, turbulence, flow, amplitude)

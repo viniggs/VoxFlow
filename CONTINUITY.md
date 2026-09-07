@@ -293,3 +293,16 @@ Usuário aprovou explicitamente a malha final e o núcleo. Velocidade final da
 nebulosa: multiplicador 2,30 no tempo do volume (substitui o ajuste de 15%).
 Malha preservada após o aceite. Autorizada a geração/publicação do instalador
 local e salvamento das alterações. Não há remoto Git configurado.
+
+## 0.6.1 — interação de voz e mouse
+
+- Orbe F9: 240 → 360 px (50% maior).
+- Ondas extras emitidas pelo envelope de voz; intensidade proporcional à entrada,
+  propagação pela superfície, limite de deformação e dissipação no silêncio.
+- Movimento e intensidade originais de repouso preservados por pedido explícito.
+- Mouse: ondulação local e atração delicada na face frontal, posição e força suavizadas,
+  retorno ao sair. Sem alterar o comportamento de clique do F9.
+- Processamento das deformações permanece no vertex shader; CPU envia quatro pulsos
+  e a posição do cursor. Voz TTS continua usando tempos de palavras, não volume PCM.
+- Prévia: acrescentar `--conversation` para ver o painel real F9, com áudio simulado.
+- 46 testes passaram; Ruff passou; shaders OpenGL renderizados e captura F9 inspecionada.

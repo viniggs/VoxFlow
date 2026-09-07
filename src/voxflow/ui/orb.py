@@ -215,6 +215,11 @@ class Orb(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         self.setAutoFillBackground(False)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMouseTracking(True)
+        self._hover = [0.0, 0.0, 0.0]
+        self._hover_target = [0.0, 0.0, 0.0]
+        self._voice_waves: list[tuple[float, float]] = []
+        self._last_voice_wave = -1.0
         self._shell = build_shell(self._shell_count(diameter))
         self._rings, self._ring_trig = build_membrane(diameter)
         self._dot_scale = self._mote_scale(diameter)
@@ -317,6 +322,7 @@ class Orb(QWidget):
         self._amplitude = 0.0
         self._history = deque([0.0] * _HISTORY_LENGTH, maxlen=_HISTORY_LENGTH)
         self._ripples.clear()
+        self._voice_waves.clear()
 
     # -------------------------------------------------------------- Qt hooks
 
@@ -329,11 +335,26 @@ class Orb(QWidget):
     def hideEvent(self, event) -> None:  # noqa: ANN001, N802
         super().hideEvent(event)
         self._timer.stop()
+        self._hover_target[2] = 0.0
+        self._hover[2] = 0.0
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        x = 2.0 * event.position().x() / self.width() - 1.0
+        y = 1.0 - 2.0 * event.position().y() / self.height()
+        distance = math.hypot(x, y)
+        strength = 1.0 - self._eased(min(1.0, max(0.0, (distance - 0.53) / 0.15)))
+        self._hover_target = [x, y, strength]
+        self._sync_interval()
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: ANN001, N802
+        self._hover_target[2] = 0.0
+        super().leaveEvent(event)
 
     # ------------------------------------------------------------- Animation
 
@@ -344,6 +365,9 @@ class Orb(QWidget):
             or self._target_amplitude > 0.02
             or self._transition < 1.0
             or bool(self._ripples)
+            or self._hover[2] > 0.01
+            or self._hover_target[2] > 0.01
+            or bool(self._voice_waves)
         )
         interval = 1000 // (_ACTIVE_FPS if busy else _CALM_FPS)
         if self._timer.interval() != interval:
@@ -361,6 +385,19 @@ class Orb(QWidget):
         if self._transition < 1.0:
             self._transition = min(1.0, self._transition + delta / _TRANSITION_SECONDS)
         self._shell_phase += delta * self._current_motion().speed
+        self._voice_waves = [(born, strength) for born, strength in self._voice_waves
+                             if self._time - born < 1.8]
+        voiced = self._state in {VisualState.LISTENING, VisualState.SPEAKING}
+        since_wave = self._time - self._last_voice_wave
+        attack = self._target_amplitude - self._amplitude
+        if (voiced and self._target_amplitude > 0.16 and since_wave > 0.16
+                and (attack > 0.08 or since_wave > 0.36)):
+            self._voice_waves.append((self._time, self._target_amplitude))
+            self._voice_waves = self._voice_waves[-4:]
+            self._last_voice_wave = self._time
+        hover_blend = 1.0 - math.exp(-delta / 0.14)
+        for index in range(3):
+            self._hover[index] += (self._hover_target[index] - self._hover[index]) * hover_blend
         rising = self._target_amplitude > self._amplitude
         smoothing = 1.0 - math.exp(-delta / (0.065 if rising else 0.23))
         self._amplitude += (self._target_amplitude - self._amplitude) * smoothing
@@ -426,6 +463,8 @@ class Orb(QWidget):
             self._amplitude,
             (motion.swell, motion.audio, 0.0, motion.bands),
             self._shell_phase,
+            tuple(self._hover),
+            tuple((self._time - born, strength) for born, strength in self._voice_waves),
         )
         if image is None:
             return False
