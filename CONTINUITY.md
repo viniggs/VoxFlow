@@ -1,8 +1,8 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-07
-Versão: 0.5.5
-Fase concluída no código: Fase 4, aguardando aceite manual
+Versão: 0.7.0
+Fase concluída no código: Fase 4.5, aguardando aceite manual
 
 ## Objetivo
 
@@ -240,7 +240,7 @@ recria o speaker com a voz selecionada.
 ## Próxima fase — somente após OK do usuário
 
 Fase 5: comandos de voz do modo estudo, screenshot para Hermes, log Markdown por sessão e
-resumo/revisão ao encerrar. Não iniciar antes do aceite manual da versão 0.5.0/Fase 4.
+resumo/revisão ao encerrar. Não iniciar antes do aceite manual da versão 0.7.0.
 
 ## Restrições
 
@@ -327,3 +327,137 @@ ativá-lo explicitamente. Ciclo sintético (~2,7 s) não pertence ao app instala
   event filters globais precisam tolerar atributos do dono já liberados.
 - Controles por clique e reação da malha preservados. Verificação visual da borda
   nativa no desktop ainda depende da observação do usuário.
+## 0.7.0 — Pensamento visível e a conversa que parou de travar (2026-09-07)
+
+Esta entrega troca o endpoint usado para falar com o Hermes e passa a mostrar o
+raciocínio da Friday ao vivo. O modo Ditado não foi tocado.
+
+### O sintoma que iniciou tudo
+
+O usuário relatou dois travamentos que "antes nunca aconteciam": ela ficava presa
+em "pensando", ou falava quase toda a resposta, omitia a última frase e ficava presa
+em "falando" sem dizer nada. O usuário recusou, com razão, a primeira proposta de
+mitigação (timeouts para pular o que travasse) e exigiu a causa raiz.
+
+### O que a investigação encontrou, com evidência
+
+O diagnóstico só ficou correto depois de descartar três suspeitos por medição:
+
+- **Não era o `edge-tts`.** Um teste A/B alternado entre `communicate.save()` e o
+  `_collect()` deste projeto deu bytes de áudio idênticos e zero travadas em 14
+  chamadas. Uma troca feita na 0.6.0 (para capturar `WordBoundary`) parecia culpada
+  pela coincidência de datas, e não era.
+- **Não era a interface.** Com as duas janelas animando no mesmo processo, a síntese
+  manteve mediana de 1154 ms e zero travadas em 12 chamadas.
+- **Era o gateway.** O log mostrou dois silêncios de 110 s *dentro da mesma resposta*,
+  sem nenhum turno novo entre eles. E o tempo até o primeiro token subiu sozinho ao
+  longo do dia: 6,0 s → 16,5 s → 42,1 s → 28,2 s, com respostas chegando a 71 s.
+
+A causa: `response_store.db` do Hermes tinha 21,5 MB, e a maior resposta guardada
+tinha 4,83 MB — dos quais 4,827 MB eram `conversation_history`, com `reasoning` e
+`reasoning_content` gravados **em dobro** (674 KB cada) contra 432 KB de conversa real.
+A cadeia `conversation` do `/v1/responses` acumulava tudo e reenviava a cada turno.
+O VoxFlow **não** enviava esse histórico: o corpo medido era de 585 bytes.
+
+### O pensamento: por que não aparecia, e como aparece agora
+
+`/v1/responses` e `/v1/runs` não transmitem raciocínio. O evento `reasoning.available`
+que existe ali é derivado: `agent/turn_response_intake.py` pega o *texto da resposta*,
+remove as tags `<think>`/`<reasoning>` e envia os primeiros 500 caracteres — por isso
+o texto chegava idêntico à resposta.
+
+O raciocínio real é emitido como `reasoning.delta`, e apenas por quem registra um
+`reasoning_callback`. O servidor HTTP não registra nenhum. O app desktop do Hermes vê
+porque fala outro protocolo: JSON-RPC sobre WebSocket, em `/api/ws`, servido por
+processos `hermes serve` **efêmeros** que o próprio desktop cria — porta aleatória e
+token rotativo, o que torna esse caminho inviável para o VoxFlow.
+
+A solução veio de uma consulta ao próprio Hermes, que apontou um hook oficial que
+esta investigação não tinha encontrado: com `plugins.stream_reasoning_deltas: true`,
+todo delta de raciocínio é enfileirado para plugins com `kind="reasoning"`
+(`agent/stream_delivery.py`). O gate `wants_reasoning` já era verdadeiro no caminho
+HTTP, porque o api_server passa `stream_delta_callback` — o delta já era produzido e
+simplesmente descartado.
+
+### O que existe agora
+
+**Do lado do Hermes** (fora deste repositório, instalado e validado):
+
+- `~/.hermes/plugins/voxflow-reasoning/` — plugin que escreve cada delta como uma
+  linha JSON.
+- `plugins.enabled: ["voxflow-reasoning"]` e `plugins.stream_reasoning_deltas: true`.
+
+**Contrato do arquivo**, em `%LOCALAPPDATA%\VoxFlow\reasoning\stream.jsonl`:
+
+```json
+{"ts":..., "session_id":"voxflow:estudo", "turn_id":"...", "iteration":1,
+ "kind":"reasoning", "delta":"..."}
+```
+
+Um arquivo único, não um por sessão: ids de sessão contêm dois-pontos
+(`voxflow:estudo`) e o Windows proíbe isso em nome de arquivo. O plugin escreve o
+raciocínio de **todas** as sessões do gateway (Discord, cron, etc.), então filtrar por
+`session_id` do lado do VoxFlow é obrigatório. Rotação automática em 1 MiB.
+
+**Do lado do VoxFlow:**
+
+- `hermes/reasoning.py` — segue o arquivo, filtra por sessão, descarta linhas com
+  `kind` diferente de `reasoning` (o hook também carrega a resposta, que já chega por
+  SSE) e agrupa por `turn_id`. Rotação é detectada por inode, não por tamanho: um
+  arquivo novo que já cresceu além do offset antigo é indistinguível de conteúdo
+  acrescentado — um teste pegou isso antes de chegar no app.
+- `ui/conversation.py` — cada bloco de raciocínio vira um balão próprio, menor e mais
+  apagado, acima da resposta. Um turno que pensa, chama uma ferramenta e pensa de novo
+  aparece como dois balões, não um parágrafo só.
+
+### A migração para `/v1/runs`
+
+`hermes/client.py` ganhou `stream_run`, ao lado do `stream_response` existente. A
+chave `hermes.use_runs_api` escolhe entre os dois; o padrão é o caminho novo.
+
+- **`session_id` vai no corpo**, não no cabeçalho. `api_server_runs.py` resolve
+  `body.get("session_id") or stored_session_id or run_id`; mandar só o cabeçalho cai
+  no fallback e o histórico vira o `run_id`. O cabeçalho `X-Hermes-Session-Key` existe
+  mas é outra coisa: escopo de memória de longo prazo.
+- **Cancelamento de verdade.** `stop_active_run()` faz `POST /v1/runs/{id}/stop` a
+  partir da thread que cancela. Antes, a flag de cancelamento só era lida entre linhas
+  do SSE, então um turno interrompido continuava enquanto o gateway estivesse calado —
+  no log, quinze segundos depois de um barge-in — segurando um dos dois workers do
+  pool. Dois desses e o app ficava em "pensando" para sempre.
+- **Pool separado para controle.** Parar, health e start/stop do gateway não disputam
+  mais lugar com um turno em andamento.
+
+Medições contra o gateway real: aceite do run em 212 ms; primeiro token em 11,5 s
+contra 28,2 s na conversa encadeada; `stop_active_run` retornou em 184 ms e o worker
+foi liberado 249 ms depois.
+
+### Instrumentação nova
+
+- `hermes_delta_gap hermes_delta_gap_ms=` — silêncio de 2 s ou mais **dentro** de uma
+  resposta. Antes só existia o primeiro delta e o fim, então um engasgo no meio era
+  invisível e se manifestava como pausa entre frases faladas, o que parecia (e não era)
+  falha de síntese.
+- `hermes_response_completed` agora carrega `worst_delta_gap_ms`.
+- `hermes_run_started ... accepted_ms=` — o aceite quase imediato do run.
+- `hermes_run_stopped` / `hermes_run_stop_failed`.
+
+### Um engano corrigido
+
+Durante a investigação foi adicionado `model.reasoning_echo: true` ao
+`~/.hermes/config.yaml` na crença errada de que aquilo controlava a exibição do
+raciocínio. Não controla: `agent/message_sanitization.py` mostra que é política de
+reenvio para as famílias `kimi`/`deepseek`/`mimo`, que devolvem 400 se o
+`reasoning_content` não voltar no wire. O provider em uso (`opencode-go`) não está
+nessa tabela. **A chave foi removida.** Backup em
+`config.yaml.bak.pre-reasoning-echo-20260907_111306`.
+
+### Riscos conhecidos desta entrega
+
+- O histórico passa a vir do `state.db` por sessão, em vez da cadeia de respostas
+  armazenadas. Foi validado que a Friday cita o turno anterior sem histórico no corpo,
+  mas **a primeira conversa real deve confirmar que ela ainda lembra**. Se não lembrar,
+  desligar `use_runs_api` em Ajustes → Hermes devolve o comportamento anterior.
+- O `response_store.db` de 21,5 MB continua no disco. O caminho novo não o alimenta
+  mais, mas ele não foi limpo.
+- As conversas `voxflow:probe-*` criadas durante a investigação ficaram no `state.db` e
+  podem ser removidas quando conveniente.

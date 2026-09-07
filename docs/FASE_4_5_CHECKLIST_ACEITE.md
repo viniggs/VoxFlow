@@ -56,3 +56,52 @@ comportamento de ditado, VAD, barge-in, half-duplex ou contrato do Hermes foi al
 
 - [ ] Com a janela principal aberta e o painel visível, o uso de CPU permanece aceitável.
 - [ ] Fechar/ocultar a janela principal reduz o uso (as animações param quando escondidas).
+
+---
+
+# VoxFlow 0.7.0 — Pensamento visível e conversa que não trava
+
+Data: 2026-09-07
+
+Esta parte substitui o transporte usado para falar com o Hermes. O modo Ditado
+não foi tocado.
+
+## O pensamento da Friday
+
+- [ ] Pressionar `F9`, fazer uma pergunta que exija raciocínio
+  ("pense com calma e explique por que o gelo derretendo aumenta a entropia").
+- [ ] Confirmar que aparece um **balão discreto, menor e mais apagado**, com o
+  pensamento dela sendo escrito, **antes** da resposta.
+- [ ] Confirmar que o texto do pensamento é diferente da resposta — é o raciocínio
+  interno, não um adiantamento do que ela vai dizer.
+- [ ] Fazer uma pergunta que a leve a usar uma ferramenta. Confirmar que aparecem
+  **dois balões de pensamento separados** (ela pensa, usa a ferramenta, pensa de novo)
+  em vez de um bloco só.
+
+## A conversa não trava mais
+
+- [ ] Fazer uma pergunta longa e, enquanto ela fala, **interromper falando por cima**.
+- [ ] Confirmar que ela para e o novo turno começa **imediatamente** — sem aquela
+  espera de vários segundos.
+- [ ] Repetir a interrupção quatro ou cinco vezes seguidas, rápido.
+  **Antes isso travava o app em "pensando" para sempre.** Confirmar que não trava mais.
+- [ ] Fazer cinco turnos seguidos e confirmar que nenhum fica preso em "falando"
+  sem falar nada.
+
+## Memória
+
+- [ ] Perguntar algo, e no turno seguinte perguntar "o que eu acabei de te perguntar?".
+- [ ] Confirmar que ela lembra. **Se não lembrar**, abrir Ajustes → Hermes e desligar
+  `use_runs_api`; o caminho antigo volta e a conversa segue funcionando.
+
+## Diagnóstico
+
+- [ ] Conferir `%LOCALAPPDATA%\VoxFlow\logs\voxflow.log` e localizar:
+  - `hermes_run_started ... accepted_ms=` — deve ficar em torno de 200 ms
+  - `hermes_first_delta ttfb_hermes_ms=` — compare com os 28 s de antes
+  - `hermes_run_stopped` — aparece a cada interrupção
+  - `hermes_delta_gap` — só aparece quando o Hermes engasga de verdade
+- [ ] Conferir que `%LOCALAPPDATA%\VoxFlow\reasoning\stream.jsonl` está crescendo.
+
+Se o pensamento não aparecer, o plugin do Hermes é a primeira coisa a conferir:
+`~/.hermes/plugins/voxflow-reasoning/` e `plugins.stream_reasoning_deltas: true`.

@@ -4,22 +4,19 @@ VoxFlow será um aplicativo Windows de ditado universal e estudo por voz integra
 
 ## Estado atual
 
-Fase 4: ditado universal completo e modo Hermes hands-free com VAD, resposta SSE
-em tempo real, leitura por frases, interrupção por voz, half-duplex e painel dedicado.
+Fase 4.5: ditado universal, interface em torno do orbe da Friday renderizado na GPU,
+e modo Hermes hands-free com raciocínio visível.
 
 Segure `Ctrl + Numpad +`, fale e solte. O preview aparece somente no VoxFlow;
 o texto final é inserido no aplicativo ativo depois que o atalho é solto.
 
 Pressione `F9` para entrar no modo Hermes. Fale normalmente e aguarde o silêncio
-encerrar cada turno; a conversa segue sem teclado. Pressione `F9` novamente para sair.
+encerrar cada turno. O painel mostra o que ela está pensando enquanto pensa, e a
+resposta conforme ela chega. Falar por cima interrompe.
 
-## Friday — visual 0.6.0
-
-Esfera com núcleo volumétrico, malha densa de aproximadamente 16 mil pontos e
-ondulações suaves por estado. Núcleo, pérolas e raios de luz são calculados na GPU.
-A malha reage ao microfone e ao envelope de palavras do TTS. O restante da composição
-usa Qt. Prévia independente: `.venv/Scripts/python.exe scripts/preview_friday.py`
-(áudio simulado, sem conectar microfone ou Hermes).
+O pensamento depende de um plugin instalado no Hermes
+(`~/.hermes/plugins/voxflow-reasoning/`), que escreve os deltas de raciocínio em
+`%LOCALAPPDATA%\VoxFlow\reasoning\stream.jsonl`. Sem ele o resto funciona igual.
 
 ## Desenvolvimento
 
