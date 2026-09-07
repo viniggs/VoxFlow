@@ -306,3 +306,7 @@ local e salvamento das alterações. Não há remoto Git configurado.
   e a posição do cursor. Voz TTS continua usando tempos de palavras, não volume PCM.
 - Prévia: acrescentar `--conversation` para ver o painel real F9, com áudio simulado.
 - 46 testes passaram; Ruff passou; shaders OpenGL renderizados e captura F9 inspecionada.
+
+Controles F9 (voz, ajustes, ocultar) agora alternam por clique no orbe.
+Hover não mostra controles. Layout reserva a altura da linha oculta para que
+a conversa e o orbe permaneçam imóveis ao revelar/esconder os botões.

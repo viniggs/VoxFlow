@@ -39,3 +39,22 @@ def test_hover_tracks_cursor_and_releases_without_a_jump(qt_app):
     for _ in range(60):
         orb.advance(1 / 60)
     assert orb._hover[2] < 0.001
+
+
+def test_f9_controls_toggle_without_moving_orb(qt_app):
+    from voxflow.ui.conversation import ConversationOverlay
+
+    panel = ConversationOverlay('pt-BR-ThalitaMultilingualNeural')
+    panel.resize(470, 800)
+    panel.show()
+    qt_app.processEvents()
+    before = panel._orb.geometry()
+    panel._orb.clicked.emit()
+    qt_app.processEvents()
+    assert panel._controls.isVisible()
+    assert panel._orb.geometry() == before
+    panel._orb.clicked.emit()
+    qt_app.processEvents()
+    assert panel._controls.isHidden()
+    assert panel._orb.geometry() == before
+    panel.hide()

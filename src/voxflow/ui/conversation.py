@@ -251,7 +251,7 @@ class ConversationOverlay(QWidget):
 
         self._orb = Orb(360)
         self._orb.use_external_clock()
-        self._orb.clicked.connect(self.toggle_requested.emit)
+        self._orb.clicked.connect(self._toggle_controls)
         self._caption = QLabel("Pressione F9 para chamar a Friday")
         self._caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._caption.setWordWrap(True)
@@ -284,6 +284,9 @@ class ConversationOverlay(QWidget):
         controls_layout.addWidget(settings_button)
         controls_layout.addWidget(hide_button)
         controls_layout.addStretch(1)
+        policy = self._controls.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        self._controls.setSizePolicy(policy)
         self._controls.setVisible(False)
 
         layout = QVBoxLayout(self)
@@ -440,13 +443,8 @@ class ConversationOverlay(QWidget):
         self._fade.setGeometry(0, 0, self.width(), 62)
         self._fade.raise_()
 
-    def enterEvent(self, event) -> None:  # noqa: ANN001, N802
-        super().enterEvent(event)
-        self._controls.setVisible(True)
-
-    def leaveEvent(self, event) -> None:  # noqa: ANN001, N802
-        super().leaveEvent(event)
-        self._controls.setVisible(False)
+    def _toggle_controls(self) -> None:
+        self._controls.setVisible(self._controls.isHidden())
 
     def paintEvent(self, event) -> None:  # noqa: ANN001, N802
         del event
