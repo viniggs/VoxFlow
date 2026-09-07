@@ -1,7 +1,7 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-07
-Versão: 0.5.3
+Versão: 0.5.4
 Fase concluída no código: Fase 4, aguardando aceite manual
 
 ## Objetivo
@@ -166,8 +166,8 @@ O prompt pronto para a próxima IA está em `PROMPT_INICIALIZACAO_PROXIMA_IA.md`
 - `F9` alterna entre Ditado e Hermes; o menu do tray oferece os mesmos modos.
 - Máquina de estados `OFF → LISTENING → TRANSCRIBING → THINKING → SPEAKING → LISTENING`.
 - Endpointing local por energia: fala sustentada por 300 ms e fim após 700 ms de silêncio.
-- Cliente `httpx` para `/v1/responses`, estado por `conversation`, chave Bearer no keyring e
-  parsing incremental de `response.output_text.delta`/`response.completed`.
+- Cliente `httpx` para `/v1/responses`, histórico contínuo por `conversation`, chave Bearer no
+  keyring e parsing incremental de `response.output_text.delta`/`response.completed`.
 - Painel sempre no topo mostra a fala reconhecida e a resposta do Hermes conforme os deltas SSE.
 - Edge TTS consome frases de aproximadamente 40 caracteres ou mais; playback Windows pode ser
   interrompido imediatamente, descartando a fila no barge-in.
@@ -182,7 +182,7 @@ O prompt pronto para a próxima IA está em `PROMPT_INICIALIZACAO_PROXIMA_IA.md`
   mas não foi empacotado para evitar custo pesado sem evidência de necessidade na RTX 5070.
 - Validação automatizada final em 2026-09-07: Ruff aprovado e 26 testes aprovados.
 - O executável empacotado respondeu com código 0 ao diagnóstico `--check`.
-- Entrega: `releases\fase-4\VoxFlow-0.5.3-fase-4-setup.exe`, ZIP de código no mesmo
+- Entrega: `releases\fase-4\VoxFlow-0.5.4-fase-4-setup.exe`, ZIP de código no mesmo
   diretório e checklist em `docs\FASE_4_CHECKLIST_ACEITE.md`.
 
 ### Correção 0.5.1 após primeiro teste
@@ -213,6 +213,23 @@ anterior e sair, deixando voz e código antigos residentes até um encerramento 
 mostra o nome da voz realmente carregada e o log registra `tts_speaker_ready` com a voz ativa.
 As configurações oferecem um dropdown editável com Thalita e Francisca (femininas) e Antônio
 (masculina); a troca é aplicada após reiniciar o VoxFlow.
+
+### Correção 0.5.4 — contrato explícito de conversa
+
+O histórico da Friday não é apagado nem recriado a cada execução. O valor existente
+`voxflow:estudo` continua sendo usado como `conversation_id`, preservando a conversa nomeada
+no Hermes. A configuração agora separa claramente:
+
+- `session_key`: escopo de memória/autorização enviado no cabeçalho `X-Hermes-Session-Key`;
+- `conversation_id`: identificador da conversa/histórico enviado no campo `conversation`;
+- `input`: apenas a fala atual, estruturada como um turno `role=user` com conteúdo `input_text`;
+- `instructions`: instruções do sistema/tutor, separadas do turno do usuário.
+
+Isso segue a semântica normal da Responses API: o Hermes recupera os turnos anteriores pela
+conversa nomeada e recebe a fala nova como uma mensagem distinta, sem prefixos ou bloco manual
+de histórico. A UI de configurações expõe os dois identificadores com nomes diferentes. Para
+começar uma conversa nova no futuro, basta escolher outro `conversation_id`; isso não apaga a
+conversa antiga.
 
 ## Próxima fase — somente após OK do usuário
 

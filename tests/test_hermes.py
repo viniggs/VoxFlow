@@ -1,6 +1,6 @@
 import json
 
-from voxflow.hermes.client import parse_sse_data
+from voxflow.hermes.client import build_response_body, parse_sse_data
 from voxflow.hermes.tts import SentenceBuffer, clean_spoken_text
 
 
@@ -10,6 +10,19 @@ def test_parse_hermes_sse_delta() -> None:
     assert parse_sse_data(f"data: {json.dumps(payload)}") == payload
     assert parse_sse_data("event: message") is None
     assert parse_sse_data("data: [DONE]") is None
+
+
+def test_hermes_body_separates_current_user_turn_from_conversation_history() -> None:
+    body = build_response_body("Qual é o próximo passo?", "Responda curto.", "voxflow:estudo")
+
+    assert body["conversation"] == "voxflow:estudo"
+    assert body["instructions"] == "Responda curto."
+    assert body["input"] == [
+        {
+            "role": "user",
+            "content": [{"type": "input_text", "text": "Qual é o próximo passo?"}],
+        }
+    ]
 
 
 def test_sentence_buffer_combines_short_sentences_and_flushes_tail() -> None:

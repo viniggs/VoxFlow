@@ -165,6 +165,7 @@ class VoxFlowController(QObject):
             config.hermes.base_url,
             SecretStore().get("hermes") or "",
             config.hermes.session_key,
+            config.hermes.conversation_id,
         )
 
     def _create_speaker(self, config: AppConfig) -> EdgeSentenceSpeaker:

@@ -162,6 +162,7 @@ class SettingsWindow(QWidget):
         self._hermes_key.setEchoMode(QLineEdit.EchoMode.Password)
         self._hermes_key.setPlaceholderText("Chave já armazenada; deixe vazio para manter")
         self._session_key = QLineEdit(self._config.hermes.session_key)
+        self._conversation_id = QLineEdit(self._config.hermes.conversation_id)
         self._half_duplex = QCheckBox("Não ouvir enquanto o Hermes fala")
         self._half_duplex.setChecked(self._config.hermes.half_duplex)
         self._attach_screenshot = QCheckBox("Permitir screenshot por comando")
@@ -195,7 +196,8 @@ class SettingsWindow(QWidget):
         controls.addWidget(stop_button)
         form.addRow("URL:", self._hermes_url)
         form.addRow("Chave da API:", self._hermes_key)
-        form.addRow("Chave de sessão:", self._session_key)
+        form.addRow("Escopo de memória (session key):", self._session_key)
+        form.addRow("Conversa / histórico (conversation ID):", self._conversation_id)
         form.addRow("Half-duplex:", self._half_duplex)
         form.addRow("Screenshot:", self._attach_screenshot)
         form.addRow("Provider TTS:", self._tts_provider)
@@ -346,8 +348,9 @@ class SettingsWindow(QWidget):
         )
         hermes = self._config.hermes.model_copy(
             update={
-                "base_url": self._hermes_url.text().strip(),
-                "session_key": self._session_key.text().strip(),
+                  "base_url": self._hermes_url.text().strip(),
+                  "session_key": self._session_key.text().strip(),
+                  "conversation_id": self._conversation_id.text().strip(),
                 "half_duplex": self._half_duplex.isChecked(),
                 "attach_screenshot_on_command": self._attach_screenshot.isChecked(),
                 "instructions": self._hermes_instructions.toPlainText().strip(),

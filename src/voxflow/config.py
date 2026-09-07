@@ -96,6 +96,7 @@ class TTSConfig(StrictModel):
 class HermesConfig(StrictModel):
     base_url: str = "http://127.0.0.1:8642/v1"
     session_key: str = "voxflow:estudo"
+    conversation_id: str = "voxflow:estudo"
     half_duplex: bool = False
     attach_screenshot_on_command: bool = True
     instructions: str = (

@@ -30,11 +30,39 @@ def parse_sse_data(line: str) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+def build_response_body(
+    text: str,
+    instructions: str,
+    conversation_id: str,
+) -> dict[str, Any]:
+    """Build a Responses API request with explicit chat-turn semantics."""
+    return {
+        "model": "hermes-agent",
+        "input": [
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": text}],
+            }
+        ],
+        "instructions": instructions,
+        "conversation": conversation_id,
+        "store": True,
+        "stream": True,
+    }
+
+
 class HermesClient:
-    def __init__(self, base_url: str, api_key: str, session_key: str) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        session_key: str,
+        conversation_id: str,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._session_key = session_key
+        self._conversation_id = conversation_id
 
     def health(self, timeout: float = 2.0) -> tuple[bool, str]:
         root = self._base_url.removesuffix("/v1")
@@ -60,14 +88,7 @@ class HermesClient:
         first_delta = True
         chunks: list[str] = []
         response_id = ""
-        body = {
-            "model": "hermes-agent",
-            "input": text,
-            "instructions": instructions,
-            "conversation": self._session_key,
-            "store": True,
-            "stream": True,
-        }
+        body = build_response_body(text, instructions, self._conversation_id)
         with (
             httpx.Client(timeout=httpx.Timeout(90.0, connect=5.0)) as client,
             client.stream(
