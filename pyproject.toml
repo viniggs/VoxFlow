@@ -1,0 +1,68 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "voxflow"
+version = "0.1.0"
+description = "Ditado universal e companheiro de estudos por voz para Windows"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "keyring",
+  "loguru",
+  "numpy",
+  "pydantic>=2",
+  "pydantic-settings",
+  "pyyaml",
+  "sounddevice",
+]
+
+[project.optional-dependencies]
+desktop = [
+  "PySide6",
+  "httpx[http2]",
+  "mss",
+  "Pillow",
+  "psutil",
+  "pynput",
+  "pywin32; sys_platform == 'win32'",
+]
+providers = [
+  "edge-tts",
+  "faster-whisper",
+  "groq",
+  "openai",
+  "pyttsx3",
+]
+vad = [
+  "onnxruntime",
+  "silero-vad",
+]
+dev = [
+  "pytest",
+  "pytest-asyncio",
+  "pytest-qt",
+  "ruff",
+]
+build = [
+  "pyinstaller",
+]
+
+[project.scripts]
+voxflow = "voxflow.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/voxflow"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
