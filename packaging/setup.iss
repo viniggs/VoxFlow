@@ -1,11 +1,11 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "0.5.5"
+  #define MyAppVersion "0.6.0"
 #endif
 #ifndef BuildRoot
   #define BuildRoot "..\\dist\\VoxFlow"
 #endif
 #ifndef MyAppPhase
-  #define MyAppPhase "3"
+  #define MyAppPhase "4"
 #endif
 #ifndef OutputRoot
   #define OutputRoot "..\\releases\\fase-" + MyAppPhase
@@ -31,6 +31,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=..\assets\icon.ico
 CloseApplications=yes
 RestartApplications=no
 

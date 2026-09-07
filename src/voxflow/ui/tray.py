@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import sounddevice as sd
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtGui import QAction, QActionGroup
-from PySide6.QtWidgets import QApplication, QMenu, QStyle, QSystemTrayIcon
+from PySide6.QtGui import QAction, QActionGroup, QIcon
+from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from voxflow.autostart import is_autostart_enabled
+from voxflow.ui.orb import render_orb_icon
 
 
 class TrayController(QObject):
@@ -21,7 +22,8 @@ class TrayController(QObject):
     def __init__(self, application: QApplication, status_window: object, microphone: str) -> None:
         super().__init__()
         self._status_window = status_window
-        icon = application.style().standardIcon(QStyle.StandardPixmap.SP_MediaVolume)
+        icon = QIcon(render_orb_icon(256))
+        application.setWindowIcon(icon)
         self._tray = QSystemTrayIcon(icon, self)
         self._tray.setToolTip("VoxFlow — Pronto")
         menu = QMenu()
@@ -29,7 +31,7 @@ class TrayController(QObject):
         self._status_action = QAction("Status: Pronto", menu)
         self._status_action.setEnabled(False)
         menu.addAction(self._status_action)
-        open_action = QAction("Abrir acompanhamento", menu)
+        open_action = QAction("Abrir o VoxFlow", menu)
         open_action.triggered.connect(self.show_status)
         menu.addAction(open_action)
 

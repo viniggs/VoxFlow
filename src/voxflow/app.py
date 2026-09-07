@@ -53,6 +53,7 @@ class ControllerSignals(QObject):
     job_finished = Signal(object)
     dictation_started = Signal()
     status_changed = Signal(str)
+    dictation_visual_state = Signal(str)
     overlay_stage_changed = Signal(str)
     preview_changed = Signal(str)
     transcript_changed = Signal(str, str)
@@ -69,6 +70,7 @@ class ControllerSignals(QObject):
     hermes_delta = Signal(str)
     hermes_mode_changed = Signal(str)
     hermes_gateway_status = Signal(str)
+    hermes_speech = Signal(float, str)
     hermes_audio_ready = Signal(int, object)
     hermes_response_ready = Signal(int, object)
     hermes_stream_delta = Signal(int, str)
@@ -133,6 +135,10 @@ class VoxFlowController(QObject):
         self._hermes_timer = QTimer(self)
         self._hermes_timer.setInterval(50)
         self._hermes_timer.timeout.connect(self._hermes_tick)
+        # The orb needs a smoother feed than the VAD tick, without touching its timing.
+        self._level_timer = QTimer(self)
+        self._level_timer.setInterval(33)
+        self._level_timer.timeout.connect(self._level_tick)
 
     @staticmethod
     def _create_audio(config: AppConfig) -> AudioCapture:
@@ -175,7 +181,14 @@ class VoxFlowController(QObject):
             self._signals.tts_started.emit,
             self._signals.tts_idle.emit,
             self._signals.tts_error.emit,
+            self._signals.hermes_speech.emit,
         )
+
+    def _set_dictation_state(self, state: DictationState) -> None:
+        """Single place where the dictation state changes, so the UI always follows."""
+
+        self._state = state
+        self._signals.dictation_visual_state.emit(state.value)
 
     @property
     def state(self) -> DictationState:
@@ -189,12 +202,13 @@ class VoxFlowController(QObject):
         self._audio.open()
         self._hotkey.start()
         self._executor.submit(self._stt.warmup)
-        logger.info("voxflow_ready phase=4 hotkeys=ctrl+num_add,f9")
+        logger.info("voxflow_ready phase=4.5 hotkeys=ctrl+num_add,f9")
         self._signals.status_changed.emit("Pronto — segure Ctrl + Numpad + para ditar")
 
     def stop(self) -> None:
         self._preview_timer.stop()
         self._hermes_timer.stop()
+        self._level_timer.stop()
         self._hermes_cancel.set()
         self._speaker.close()
         self._hotkey.stop()
@@ -240,9 +254,10 @@ class VoxFlowController(QObject):
         if self._state is not DictationState.RECORDING:
             return
         self._preview_timer.stop()
+        self._level_timer.stop()
         self._recording_generation += 1
         self._audio.stop_recording()
-        self._state = DictationState.IDLE
+        self._set_dictation_state(DictationState.IDLE)
         play_cue("cancel", enabled=self._config.general.sounds)
         self._signals.status_changed.emit("Ditado cancelado")
         self._signals.dictation_finished.emit("Cancelado")
@@ -258,13 +273,14 @@ class VoxFlowController(QObject):
             return
         self._active_app = get_active_app()
         if self._audio.start_recording():
-            self._state = DictationState.RECORDING
+            self._set_dictation_state(DictationState.RECORDING)
             self._recording_generation += 1
             self._last_preview_at = 0.0
             self._signals.dictation_started.emit()
             self._signals.status_changed.emit("Ouvindo… fale e solte o atalho ao terminar")
             self._signals.overlay_stage_changed.emit("Ouvindo…")
             self._preview_timer.start()
+            self._level_timer.start()
             play_cue("start", enabled=self._config.general.sounds)
 
     @Slot()
@@ -272,6 +288,7 @@ class VoxFlowController(QObject):
         if self._state is not DictationState.RECORDING:
             return
         self._preview_timer.stop()
+        self._level_timer.stop()
         self._signals.recording_level_changed.emit(0.0)
         clip = self._audio.stop_recording()
         if clip is None:
@@ -285,7 +302,7 @@ class VoxFlowController(QObject):
             logger.info("dictation_cancelled reason=low_rms rms={:.6f}", clip.rms)
             self._reset_after_cancel("Silêncio detectado — nada foi inserido")
             return
-        self._state = DictationState.TRANSCRIBING
+        self._set_dictation_state(DictationState.TRANSCRIBING)
         self._signals.status_changed.emit("Finalizando a transcrição…")
         self._signals.overlay_stage_changed.emit("Finalizando transcrição…")
         future = self._executor.submit(self._process_clip, clip, self._active_app)
@@ -293,7 +310,7 @@ class VoxFlowController(QObject):
 
     def _reset_after_cancel(self, message: str) -> None:
         self._recording_generation += 1
-        self._state = DictationState.IDLE
+        self._set_dictation_state(DictationState.IDLE)
         play_cue("cancel", enabled=self._config.general.sounds)
         self._signals.status_changed.emit(message)
         self._signals.dictation_finished.emit(message)
@@ -306,10 +323,13 @@ class VoxFlowController(QObject):
         self._activate_config(pending)
 
     @Slot()
+    def _level_tick(self) -> None:
+        self._signals.recording_level_changed.emit(self._audio.current_rms())
+
+    @Slot()
     def _preview_tick(self) -> None:
         if self._state is not DictationState.RECORDING:
             return
-        self._signals.recording_level_changed.emit(self._audio.current_rms())
         now = time.perf_counter()
         if now - self._last_preview_at < 0.9:
             return
@@ -357,7 +377,7 @@ class VoxFlowController(QObject):
         if not transcript.text:
             raise RuntimeError("O STT não retornou texto.")
         self._signals.transcript_changed.emit(transcript.text, "")
-        self._state = DictationState.CLEANING
+        self._set_dictation_state(DictationState.CLEANING)
         self._signals.status_changed.emit("Limpando o texto…")
         self._signals.overlay_stage_changed.emit("Limpando o texto…")
         rule = resolve_app_rule(self._config, active_app)
@@ -377,7 +397,7 @@ class VoxFlowController(QObject):
         if rule.trailing_space and final_text and not final_text[-1].isspace():
             final_text += " "
         self._signals.transcript_changed.emit(transcript.text, final_text)
-        self._state = DictationState.INJECTING
+        self._set_dictation_state(DictationState.INJECTING)
         self._signals.status_changed.emit("Inserindo no aplicativo…")
         self._signals.overlay_stage_changed.emit("Inserindo…")
         inject_ms = self._injector.inject(final_text, strategy=rule.inject_strategy)
@@ -435,7 +455,7 @@ class VoxFlowController(QObject):
             self._signals.status_changed.emit("Pronto — texto processado e inserido")
             self._signals.dictation_finished.emit("✓ Texto inserido")
             play_cue("done", enabled=self._config.general.sounds)
-        self._state = DictationState.IDLE
+        self._set_dictation_state(DictationState.IDLE)
         self._apply_pending_config()
 
     @Slot()
@@ -504,12 +524,14 @@ class VoxFlowController(QObject):
         self._audio.clear_preroll()
         self._set_hermes_state(HermesState.LISTENING, message)
         self._hermes_timer.start()
+        self._level_timer.start()
 
     def _stop_hermes_mode(self) -> None:
         self._hermes_generation += 1
         self._hermes_cancel.set()
         self._speaker.interrupt()
         self._hermes_timer.stop()
+        self._level_timer.stop()
         if self._audio.is_recording:
             self._audio.stop_recording()
         self._set_hermes_state(HermesState.OFF, "pressione F9 para iniciar")

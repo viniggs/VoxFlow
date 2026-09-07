@@ -39,6 +39,7 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,
+    icon=str(project_root / "assets" / "icon.ico"),
 )
 bundle = COLLECT(
     exe,

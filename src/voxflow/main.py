@@ -54,11 +54,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     from voxflow.app import VoxFlowController
     from voxflow.single_instance import InstanceGuard
     from voxflow.storage import HistoryStore
-    from voxflow.ui.hermes_panel import HermesPanel
+    from voxflow.ui.conversation import ConversationOverlay
     from voxflow.ui.history import HistoryWindow
     from voxflow.ui.overlay import DictationOverlay
     from voxflow.ui.settings import SettingsWindow
     from voxflow.ui.status_window import StatusWindow
+    from voxflow.ui.theme import APP_STYLE_SHEET
     from voxflow.ui.tray import TrayController
 
     guard = InstanceGuard()
@@ -71,32 +72,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     application.setApplicationName("VoxFlow")
     application.setApplicationVersion(__version__)
     application.setStyle("Fusion")
-    application.setStyleSheet(
-        "QWidget { background: #111318; color: #eef1f6; font-size: 13px; }"
-        "QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox, "
-        "QTableWidget { background: #181c24; border: 1px solid #303846; "
-        "border-radius: 5px; padding: 5px; }"
-        "QPushButton { background: #2878d0; border: 0; border-radius: 5px; "
-        "padding: 7px 11px; }"
-        "QPushButton:hover { background: #3494ef; }"
-        "QTabBar::tab { background: #202735; padding: 8px 14px; margin-right: 2px; }"
-        "QTabBar::tab:selected { background: #2878d0; }"
-    )
+    application.setStyleSheet(APP_STYLE_SHEET)
     history_store = HistoryStore(paths.data_dir / "history.sqlite3")
     controller = VoxFlowController(config, history_store)
     window = StatusWindow(controller.signals, paths.log_dir)
     overlay = DictationOverlay()
     history_window = HistoryWindow(history_store)
     settings_window = SettingsWindow(config, paths)
-    hermes_panel = HermesPanel(config.hermes.tts.voice)
+    conversation = ConversationOverlay(config.hermes.tts.voice)
     tray = TrayController(application, window, config.audio.input_device)
     controller.signals.dictation_started.connect(window.begin_dictation)
     controller.signals.dictation_started.connect(overlay.begin)
+    controller.signals.dictation_visual_state.connect(overlay.set_visual_state)
+    controller.signals.dictation_visual_state.connect(window.set_visual_state)
     controller.signals.preview_changed.connect(
         lambda text: window.set_transcript(text, "")
     )
     controller.signals.preview_changed.connect(overlay.set_preview)
     controller.signals.recording_level_changed.connect(overlay.set_level)
+    controller.signals.recording_level_changed.connect(window.set_level)
+    controller.signals.recording_level_changed.connect(conversation.set_microphone_level)
     controller.signals.overlay_stage_changed.connect(overlay.set_stage)
     controller.signals.dictation_finished.connect(
         lambda message: overlay.fail(message)
@@ -108,17 +103,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     settings_window.saved.connect(controller.apply_config)
     settings_window.history_requested.connect(history_window.show_and_refresh)
     settings_window.hermes_action_requested.connect(controller.request_hermes_action)
+    settings_window.voice_changed.connect(conversation.set_voice)
     controller.signals.hermes_gateway_status.connect(settings_window.set_hermes_status)
-    controller.signals.hermes_state_changed.connect(hermes_panel.set_state)
-    controller.signals.hermes_turn_started.connect(hermes_panel.begin_turn)
-    controller.signals.hermes_heard.connect(hermes_panel.set_heard)
-    controller.signals.hermes_delta.connect(hermes_panel.append_response)
+    controller.signals.hermes_state_changed.connect(conversation.set_state)
+    controller.signals.hermes_turn_started.connect(conversation.begin_turn)
+    controller.signals.hermes_heard.connect(conversation.set_heard)
+    controller.signals.hermes_delta.connect(conversation.append_delta)
+    controller.signals.hermes_speech.connect(conversation.set_spoken_word)
     controller.signals.hermes_mode_changed.connect(tray.set_mode)
     controller.signals.hermes_mode_changed.connect(
-        lambda mode: hermes_panel.show() if mode == "hermes" else hermes_panel.hide()
+        lambda mode: conversation.present() if mode == "hermes" else conversation.hide()
     )
-    hermes_panel.toggle_requested.connect(controller.toggle_hermes)
-    hermes_panel.voice_changed.connect(settings_window.set_hermes_voice)
+    conversation.toggle_requested.connect(controller.toggle_hermes)
+    conversation.voice_changed.connect(settings_window.set_hermes_voice)
+    conversation.settings_requested.connect(lambda: settings_window.show_tab("Hermes"))
+    window.history_requested.connect(history_window.show_and_refresh)
+    window.settings_requested.connect(lambda: settings_window.show_tab("Geral"))
     tray.settings_requested.connect(settings_window.show_tab)
     tray.history_requested.connect(history_window.show_and_refresh)
     tray.microphone_selected.connect(settings_window.set_microphone)

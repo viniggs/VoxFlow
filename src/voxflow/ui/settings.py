@@ -28,19 +28,22 @@ from voxflow.autostart import set_autostart
 from voxflow.config import AppConfig, save_config
 from voxflow.paths import AppPaths
 from voxflow.secrets import SecretStore
+from voxflow.ui.cosmos import CosmicPanel
+from voxflow.ui.theme import TEXT_FAINT, TEXT_MUTED, rgba
 
 
-class SettingsWindow(QWidget):
+class SettingsWindow(CosmicPanel):
     saved = Signal(object)
     history_requested = Signal()
     hermes_action_requested = Signal(str)
+    voice_changed = Signal(str)
 
     def __init__(self, config: AppConfig, paths: AppPaths) -> None:
-        super().__init__()
+        super().__init__(radius=20.0, density=0.5, brightness=0.5)
         self._config = config
         self._paths = paths
-        self.setWindowTitle("VoxFlow — Configurações")
-        self.resize(720, 650)
+        self.setWindowTitle("VoxFlow — Ajustes")
+        self.resize(760, 680)
         self._tabs = QTabWidget()
         self._build_general_tab()
         self._build_audio_tab()
@@ -50,15 +53,37 @@ class SettingsWindow(QWidget):
         self._build_history_tab()
 
         self._result = QLabel("")
-        save_button = QPushButton("Salvar configurações")
+        self._result.setStyleSheet(f"color: {rgba(TEXT_MUTED)}; background: transparent;")
+        save_button = QPushButton("Salvar")
+        save_button.setProperty("role", "primary")
         save_button.clicked.connect(lambda: self.save())
         footer = QHBoxLayout()
         footer.addWidget(self._result)
         footer.addStretch()
         footer.addWidget(save_button)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(34, 20, 34, 26)
+        layout.setSpacing(14)
+        layout.addLayout(self._build_header())
         layout.addWidget(self._tabs)
         layout.addLayout(footer)
+
+    def _build_header(self) -> QHBoxLayout:
+        wordmark = QLabel("AJUSTES")
+        wordmark.setStyleSheet(
+            f"color: {rgba(TEXT_FAINT)}; font-size: 11px; font-weight: 700;"
+            " letter-spacing: 6px; background: transparent;"
+        )
+        close = QPushButton("✕")
+        close.setProperty("role", "ghost")
+        close.setFixedWidth(34)
+        close.clicked.connect(self.hide)
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(wordmark)
+        row.addStretch(1)
+        row.addWidget(close)
+        return row
 
     def _build_general_tab(self) -> None:
         tab, form = self._form_tab()
@@ -180,6 +205,7 @@ class SettingsWindow(QWidget):
             self._tts_voice.setCurrentIndex(voice_index)
         else:
             self._tts_voice.setEditText(self._config.hermes.tts.voice)
+        self._tts_voice.currentIndexChanged.connect(self._emit_voice)
         self._tts_rate = QLineEdit(self._config.hermes.tts.rate)
         self._chatterbox_path = QLineEdit(self._config.hermes.tts.chatterbox_path)
         self._hermes_instructions = self._editor(self._config.hermes.instructions, 105)
@@ -263,6 +289,11 @@ class SettingsWindow(QWidget):
 
     def set_hermes_status(self, message: str) -> None:
         self._hermes_status.setText(message)
+
+    def _emit_voice(self) -> None:
+        voice = str(self._tts_voice.currentData() or self._tts_voice.currentText()).strip()
+        if voice:
+            self.voice_changed.emit(voice)
 
     def set_hermes_voice(self, voice: str) -> None:
         index = self._tts_voice.findData(voice)

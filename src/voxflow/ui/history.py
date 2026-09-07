@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QHeaderView,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
@@ -14,19 +15,20 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QTextEdit,
     QVBoxLayout,
-    QWidget,
 )
 
 from voxflow.storage import HistoryEntry, HistoryStore
+from voxflow.ui.cosmos import CosmicPanel
+from voxflow.ui.theme import TEXT_FAINT, rgba
 
 
-class HistoryWindow(QWidget):
+class HistoryWindow(CosmicPanel):
     def __init__(self, store: HistoryStore) -> None:
-        super().__init__()
+        super().__init__(radius=20.0, density=0.45, brightness=0.45)
         self._store = store
         self._entries: list[HistoryEntry] = []
         self.setWindowTitle("VoxFlow — Histórico")
-        self.resize(900, 600)
+        self.resize(940, 620)
 
         self._search = QLineEdit()
         self._search.setPlaceholderText("Buscar no texto ou aplicativo…")
@@ -50,7 +52,23 @@ class HistoryWindow(QWidget):
         buttons.addStretch()
         buttons.addWidget(clear_button)
 
+        wordmark = QLabel("HISTÓRICO")
+        wordmark.setStyleSheet(
+            f"color: {rgba(TEXT_FAINT)}; font-size: 11px; font-weight: 700;"
+            " letter-spacing: 6px; background: transparent;"
+        )
+        close = QPushButton("✕")
+        close.setProperty("role", "ghost")
+        close.setFixedWidth(34)
+        close.clicked.connect(self.hide)
+        header = QHBoxLayout()
+        header.addWidget(wordmark)
+        header.addStretch(1)
+        header.addWidget(close)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 20, 30, 24)
+        layout.setSpacing(13)
+        layout.addLayout(header)
         layout.addWidget(self._search)
         layout.addWidget(self._table)
         layout.addWidget(self._detail)
