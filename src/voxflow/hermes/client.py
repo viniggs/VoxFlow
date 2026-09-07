@@ -12,6 +12,10 @@ from typing import Any
 import httpx
 from loguru import logger
 
+#: A stream that goes quiet for longer than this is stalling, not thinking: the
+#: gateway has already started emitting text by then.
+_DELTA_GAP_ALERT_SECONDS = 2.0
+
 
 @dataclass(frozen=True, slots=True)
 class HermesReply:
@@ -88,6 +92,8 @@ class HermesClient:
         first_delta = True
         chunks: list[str] = []
         response_id = ""
+        last_delta_at = 0.0
+        worst_gap = 0.0
         body = build_response_body(text, instructions, self._conversation_id)
         with (
             httpx.Client(timeout=httpx.Timeout(90.0, connect=5.0)) as client,
@@ -109,12 +115,26 @@ class HermesClient:
                 if event_type == "response.output_text.delta":
                     delta = str(event.get("delta", ""))
                     if delta:
+                        now = time.perf_counter()
                         if first_delta:
                             logger.info(
                                 "hermes_first_delta ttfb_hermes_ms={:.2f}",
-                                (time.perf_counter() - started) * 1000,
+                                (now - started) * 1000,
                             )
                             first_delta = False
+                        else:
+                            gap = now - last_delta_at
+                            worst_gap = max(worst_gap, gap)
+                            if gap >= _DELTA_GAP_ALERT_SECONDS:
+                                # The gateway stopped mid-reply. Logged where it happens,
+                                # so a stall can never again be mistaken for slow speech.
+                                logger.warning(
+                                    "hermes_delta_gap hermes_delta_gap_ms={:.2f} "
+                                    "chars_so_far={}",
+                                    gap * 1000,
+                                    len("".join(chunks)),
+                                )
+                        last_delta_at = now
                         chunks.append(delta)
                         on_delta(delta)
                 elif event_type == "response.completed":
@@ -126,9 +146,10 @@ class HermesClient:
                     raise RuntimeError(self._event_error(event))
         elapsed_ms = (time.perf_counter() - started) * 1000
         logger.info(
-            "hermes_response_completed elapsed_ms={:.2f} chars={}",
+            "hermes_response_completed elapsed_ms={:.2f} chars={} worst_delta_gap_ms={:.2f}",
             elapsed_ms,
             len("".join(chunks)),
+            worst_gap * 1000,
         )
         return HermesReply("".join(chunks).strip(), response_id)
 
