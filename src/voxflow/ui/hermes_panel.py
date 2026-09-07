@@ -35,6 +35,7 @@ class HermesPanel(QWidget):
     def set_state(self, state: str, message: str) -> None:
         labels = {
             "off": "Desligado",
+            "starting": "Iniciando",
             "listening": "Ouvindo…",
             "transcribing": "Transcrevendo…",
             "thinking": "Hermes está pensando…",

@@ -25,7 +25,7 @@ def gateway_reachable(base_url: str, timeout: float = 0.25) -> bool:
         return False
 
 
-def start_gateway(base_url: str, wait_seconds: float = 8.0) -> tuple[bool, str]:
+def start_gateway(base_url: str, wait_seconds: float = 60.0) -> tuple[bool, str]:
     if gateway_reachable(base_url):
         return True, "Hermes já está ativo"
     executable = gateway_executable()
@@ -44,7 +44,7 @@ def start_gateway(base_url: str, wait_seconds: float = 8.0) -> tuple[bool, str]:
         if gateway_reachable(base_url):
             return True, "Hermes iniciado"
         time.sleep(0.2)
-    return False, "Hermes não respondeu a tempo"
+    return False, f"Hermes não respondeu após {wait_seconds:.0f} segundos"
 
 
 def stop_gateway() -> tuple[bool, str]:

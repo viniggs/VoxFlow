@@ -485,11 +485,12 @@ class VoxFlowController(QObject):
             ok, message = result  # type: ignore[misc]
         self._signals.hermes_gateway_status.emit(message)
         if action == "start_mode":
+            if self._hermes_state is not HermesState.STARTING:
+                return
             if ok:
                 self._enter_hermes_listening("fale normalmente; F9 encerra")
             else:
                 self._set_hermes_state(HermesState.OFF, message)
-                self._signals.hermes_mode_changed.emit("dictation")
 
     def _set_hermes_state(self, state: HermesState, message: str = "") -> None:
         self._hermes_state = state

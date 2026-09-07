@@ -1,7 +1,7 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-07
-Versão: 0.5.0
+Versão: 0.5.1
 Fase concluída no código: Fase 4, aguardando aceite manual
 
 ## Objetivo
@@ -182,8 +182,16 @@ O prompt pronto para a próxima IA está em `PROMPT_INICIALIZACAO_PROXIMA_IA.md`
   mas não foi empacotado para evitar custo pesado sem evidência de necessidade na RTX 5070.
 - Validação automatizada final em 2026-09-07: Ruff aprovado e 26 testes aprovados.
 - O executável empacotado respondeu com código 0 ao diagnóstico `--check`.
-- Entrega: `releases\fase-4\VoxFlow-0.5.0-fase-4-setup.exe`, ZIP de código no mesmo
+- Entrega: `releases\fase-4\VoxFlow-0.5.1-fase-4-setup.exe`, ZIP de código no mesmo
   diretório e checklist em `docs\FASE_4_CHECKLIST_ACEITE.md`.
+
+### Correção 0.5.1 após primeiro teste
+
+O VoxFlow já verificava a porta 8642 e executava `hermes gateway run` quando ela estava
+fechada. O primeiro teste mostrou que o Hermes 0.21.0 leva cerca de 15 segundos para carregar
+as ferramentas, enquanto o app desistia após 8 segundos e escondia o painel. O limite passou
+para 60 segundos; uma falha mantém o painel aberto com a causa e permite tentar novamente.
+Também foi bloqueada a reativação tardia caso o usuário pressione F9 durante a inicialização.
 
 ## Próxima fase — somente após OK do usuário
 
