@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -37,7 +38,7 @@ class FasterWhisperLocalProvider:
 
     def _resolve_model_path(self) -> str:
         if (self._model_cache / "model.bin").exists():
-            return str(self._model_cache)
+            return str(self._materialize_symlinks(self._model_cache))
         snapshots = self._model_cache / "snapshots"
         if snapshots.exists():
             candidates = sorted(
@@ -50,8 +51,32 @@ class FasterWhisperLocalProvider:
                 reverse=True,
             )
             if candidates:
-                return str(candidates[0])
+                return str(self._materialize_symlinks(candidates[0]))
         return self._model_name
+
+    def _materialize_symlinks(self, source_root: Path) -> Path:
+        if os.name != "nt" or not any(path.is_symlink() for path in source_root.rglob("*")):
+            return source_root
+        local_root = Path(os.environ.get("LOCALAPPDATA", Path.home()))
+        destination_root = local_root / "VoxFlow" / "models" / self._model_name
+        for source in source_root.rglob("*"):
+            relative = source.relative_to(source_root)
+            destination = destination_root / relative
+            if source.is_dir():
+                destination.mkdir(parents=True, exist_ok=True)
+                continue
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if destination.exists():
+                continue
+            physical_source = source
+            if source.is_symlink():
+                physical_source = Path(os.path.abspath(source.parent / os.readlink(source)))
+            try:
+                os.link(physical_source, destination)
+            except OSError:
+                shutil.copy2(physical_source, destination)
+        logger.info("stt_model_materialized path={!r}", str(destination_root))
+        return destination_root
 
     def _prepare_cuda_dlls(self) -> None:
         if self._device != "cuda" or not hasattr(os, "add_dll_directory"):

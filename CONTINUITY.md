@@ -103,6 +103,16 @@ Para remover a caixa-preta, foi adicionada uma janela visível ao iniciar com:
 inicialização do pipeline falha. A entrega precisa ser instalada e testada manualmente antes
 de considerar a Fase 2 aceita.
 
+Feedback de 2026-09-07: a UI funcionou, mas o STT falhou com `WinError 448` porque os arquivos
+do snapshot Hugging Face são links simbólicos e o Windows bloqueou a travessia do ponto de
+montagem no executável instalado. O provider agora materializa o snapshot uma única vez em
+`%LOCALAPPDATA%\VoxFlow\models\large-v3-turbo` usando hardlinks para os blobs físicos (cópia
+somente como fallback), eliminando reparse points sem duplicar normalmente o modelo de 1,5 GB.
+
+Importante: a escrita palavra por palavra enquanto o usuário fala AINDA NÃO EXISTE. O STT atual
+é batch e só produz texto após soltar o atalho. A próxima IA deve implementar streaming/parciais
+visíveis se esse requisito do usuário permanecer prioritário; não afirmar que já está pronto.
+
 O prompt pronto para a próxima IA está em `PROMPT_INICIALIZACAO_PROXIMA_IA.md`.
 
 ## Próxima fase — somente após OK do usuário
