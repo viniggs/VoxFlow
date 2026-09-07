@@ -29,6 +29,7 @@ from voxflow.config import AppConfig, save_config
 from voxflow.paths import AppPaths
 from voxflow.secrets import SecretStore
 from voxflow.ui.cosmos import CosmicPanel
+from voxflow.ui.orb_studio import OrbStudio
 from voxflow.ui.theme import TEXT_FAINT, TEXT_MUTED, rgba
 
 
@@ -43,7 +44,7 @@ class SettingsWindow(CosmicPanel):
         self._config = config
         self._paths = paths
         self.setWindowTitle("VoxFlow — Ajustes")
-        self.resize(760, 680)
+        self.resize(1040, 820)
         self._tabs = QTabWidget()
         self._build_general_tab()
         self._build_audio_tab()
@@ -51,6 +52,9 @@ class SettingsWindow(CosmicPanel):
         self._build_text_tab()
         self._build_hermes_tab()
         self._build_history_tab()
+        self._studio = OrbStudio(config.orb)
+        self._studio.save_requested.connect(self._save_orb)
+        self._tabs.addTab(self._studio, "Estúdio do Orbe")
 
         self._result = QLabel("")
         self._result.setStyleSheet(f"color: {rgba(TEXT_MUTED)}; background: transparent;")
@@ -67,6 +71,20 @@ class SettingsWindow(CosmicPanel):
         layout.addLayout(self._build_header())
         layout.addWidget(self._tabs)
         layout.addLayout(footer)
+
+    def _save_orb(self, orb) -> None:
+        try:
+            config = AppConfig.model_validate(
+                self._config.model_copy(update={"orb": orb}).model_dump()
+            )
+            save_config(config, self._paths)
+        except (OSError, TypeError, ValueError) as exc:
+            self._studio.status.setText(f"Não foi possível salvar: {exc}")
+            return
+        self._config = config
+        self._result.setText("Orbe salvo. A aparência já está aplicada ao vivo.")
+        self.saved.emit(config)
+        self._studio.mark_saved()
 
     def _build_header(self) -> QHBoxLayout:
         wordmark = QLabel("AJUSTES")
@@ -122,6 +140,30 @@ class SettingsWindow(CosmicPanel):
         form.addRow("Taxa de amostragem:", self._sample_rate)
         form.addRow("Duração mínima (ms):", self._minimum_recording)
         form.addRow("Volume mínimo RMS:", self._minimum_rms)
+        self._vad_sensitivity = QDoubleSpinBox()
+        self._vad_sensitivity.setRange(0, 1)
+        self._vad_sensitivity.setSingleStep(0.05)
+        self._vad_sensitivity.setValue(self._config.audio.vad_threshold)
+        self._speech_start = QSpinBox()
+        self._speech_start.setRange(100, 1500)
+        self._speech_start.setValue(self._config.audio.speech_start_ms)
+        self._endpoint = QSpinBox()
+        self._endpoint.setRange(100, 5000)
+        self._endpoint.setValue(self._config.audio.endpoint_silence_ms)
+        self._preroll = QSpinBox()
+        self._preroll.setRange(0, 2000)
+        self._preroll.setValue(self._config.audio.preroll_ms)
+        form.addRow("Sensibilidade de detecção:", self._vad_sensitivity)
+        form.addRow("Fala mínima para iniciar (ms):", self._speech_start)
+        form.addRow("Silêncio para encerrar (ms):", self._endpoint)
+        form.addRow("Áudio anterior à fala (ms):", self._preroll)
+        hint = QLabel(
+            "Valores maiores de sensibilidade detectam sons mais baixos.\n"
+            "A duração mínima também vale para interromper a Friday.\n"
+            "Salve entre falas; dispositivo, taxa e áudio anterior exigem reiniciar o app."
+        )
+        hint.setWordWrap(True)
+        form.addRow(hint)
         self._tabs.addTab(tab, "Áudio")
 
     def _build_stt_tab(self) -> None:
@@ -290,6 +332,11 @@ class SettingsWindow(CosmicPanel):
     def set_hermes_status(self, message: str) -> None:
         self._hermes_status.setText(message)
 
+    def feed_microphone(self, rms: float) -> None:
+        """Forward the live input level to the studio's optional microphone preview."""
+
+        self._studio.feed_microphone(rms)
+
     def _emit_voice(self) -> None:
         voice = str(self._tts_voice.currentData() or self._tts_voice.currentText()).strip()
         if voice:
@@ -321,6 +368,7 @@ class SettingsWindow(CosmicPanel):
         self._config = config
         self._result.setText("Salvo. Alterações de áudio/STT valem no próximo início.")
         self.saved.emit(config)
+        self._studio.mark_saved()
         if show_dialog:
             QMessageBox.information(self, "VoxFlow", "Configurações salvas com sucesso.")
 
@@ -342,6 +390,10 @@ class SettingsWindow(CosmicPanel):
                 "sample_rate": self._sample_rate.value(),
                 "minimum_recording_ms": self._minimum_recording.value(),
                 "minimum_rms": self._minimum_rms.value(),
+                "vad_threshold": self._vad_sensitivity.value(),
+                "speech_start_ms": self._speech_start.value(),
+                "endpoint_silence_ms": self._endpoint.value(),
+                "preroll_ms": self._preroll.value(),
             }
         )
         stt = self._config.stt.model_copy(
@@ -399,6 +451,7 @@ class SettingsWindow(CosmicPanel):
         return AppConfig.model_validate(
             self._config.model_copy(
                 update={
+                    "orb": self._studio.draft,
                     "general": general,
                     "audio": audio,
                     "stt": stt,

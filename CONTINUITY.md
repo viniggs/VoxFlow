@@ -1,7 +1,7 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-07
-Versão: 0.7.1
+Versão: 0.7.2
 Fase concluída no código: Fase 4.5, aguardando aceite manual
 
 ## Objetivo
@@ -492,3 +492,32 @@ inode.
   mais, mas ele não foi limpo.
 - As conversas `voxflow:probe-*` criadas durante a investigação ficaram no `state.db` e
   podem ser removidas quando conveniente.
+
+## 0.7.2 — Estúdio do Orbe (2026-09-07)
+
+O estúdio de personalização pedido pelo usuário foi concluído no código-fonte, sem
+commit e sem atualizar o executável instalado. A aba `Estúdio do Orbe` aparece em
+`SettingsWindow` e mantém um preview GPU vivo com:
+
+- seleção de um estado (`Repouso`, `Ouvindo`, `Transcrevendo`, `Pensando`, `Falando`,
+  `Entregando texto`, `Erro`) ou `Todos juntos`;
+- prévia independente, simulação de fala, nível manual e fonte `Microfone do app`;
+- núcleo (fluxo, turbulência, tamanho, foco, energia, branco, bloom e correntes),
+  erupções (intensidade, alcance, velocidade e frequência), malha (amplitude,
+  velocidade, frequência, tamanho/luz/branco das bolinhas e hover) e reação à voz
+  (ganho, ondas, limiar, ataque, release e intervalo);
+- três color pickers com atualização enquanto a cor é arrastada;
+- `Salvar orbe`, `Voltar ao salvo` e `Restaurar padrão`, com persistência por estado.
+
+`src/voxflow/orb_settings.py` é o modelo persistido, com limites seguros e migração de
+estados ausentes. `src/voxflow/ui/orb_studio.py` implementa o editor. `gpu.py` recebe
+os perfis como uniforms reais do raymarch e da malha; `orb.py` publica o perfil ao vivo;
+`settings.py`, `main.py`, `config.py` e `app.py` completam a integração, inclusive os
+parâmetros de endpointing do áudio. `scripts/preview_friday.py --studio` abre um
+estúdio isolado que não grava a configuração do usuário.
+
+Validação desta continuação: Ruff aprovado, 69 testes aprovados, `voxflow --check`
+aprovado, shaders OpenGL 3.3 renderizados e imagem customizada diferente da imagem
+base confirmada. A prévia interativa do estúdio foi deixada aberta para observação.
+Ainda falta apenas o aceite visual do usuário e, se ele pedir, a geração de um novo
+instalador; nenhuma entrega instalada foi alterada.

@@ -167,6 +167,7 @@ class VoxFlowController(QObject):
     def _create_vad(config: AppConfig) -> EndpointDetector:
         return EndpointDetector(
             sensitivity=config.audio.vad_threshold,
+            speech_start_ms=config.audio.speech_start_ms,
             endpoint_silence_ms=config.audio.endpoint_silence_ms,
         )
 

@@ -14,9 +14,11 @@ caller falls back to the painter implementation.
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 
 from loguru import logger
 from PySide6.QtGui import (
+    QColor,
     QImage,
     QOffscreenSurface,
     QOpenGLContext,
@@ -33,6 +35,7 @@ from PySide6.QtOpenGL import (
     QOpenGLVertexArrayObject,
 )
 
+from voxflow.orb_settings import OrbProfile
 from voxflow.ui.theme import StatePalette
 
 #: Set ``VOXFLOW_ORB=painter`` to force the CPU core, for comparison or diagnosis.
@@ -118,6 +121,10 @@ uniform vec3 uDeep;
 uniform vec3 uMid;
 uniform vec3 uHot;
 uniform float uAmplitude;
+uniform float uInterior;
+uniform float uCoreSize;
+uniform float uEnergy;
+uniform vec4 uEruption;
 
 __NOISE__
 
@@ -132,7 +139,8 @@ vec3 warp(vec3 p, float t) {
     return p + uTurbulence * (q - 0.5) * 1.15;
 }
 
-#define CORE_BOUND 0.66
+#define CORE_BOUND 0.94
+#define CORE_RADIUS 0.575
 #define MOTE_RADIUS 0.88
 
 struct Sample { float density; float veins; };
@@ -140,11 +148,72 @@ struct Sample { float density; float veins; };
 Sample volume(vec3 pos, float t) {
     // A thin gaussian shell. Thickness is what turned this into fog: a fat shell
     // integrates dozens of samples per ray and averages all the structure away.
+    pos /= uCoreSize;
     float r = length(pos);
-    float shell = exp(-pow((r - 0.50) / 0.078, 2.0));
-    if (shell < 0.006) return Sample(0.0, 0.0);
+    float shell = exp(-pow((r - CORE_RADIUS) / 0.078, 2.0));
+    // Sparse eruptions are part of the volume: the very same warped ridges,
+    // emission and absorption shade both the nebula and its escaping material.
+    float plasma = 0.0;
+    if (r > CORE_RADIUS - 0.07) {
+        for (int plume = 0; plume < 3; plume++) {
+            float seed = float(plume) * 2.39996;
+            float cycle = uTime * uEruption.y / 7.0 + float(plume) / 3.0;
+            float age = min(1.0,fract(cycle)*uEruption.z);
+            float cycleFade = 1.0-smoothstep(0.85,1.0,fract(cycle));
+            float epoch = floor(cycle);
+            // A new site each time; fade to zero before the direction changes.
+            float angle = seed + epoch * 1.73;
+            vec3 axis = normalize(vec3(cos(angle),sin(angle),0.22*sin(angle*1.7)));
+            vec3 tangent = vec3(-sin(angle),cos(angle),0.0);
+            float rise = smoothstep(0.02,0.42,age);
+            float life = smoothstep(0.0,0.16,age)*(1.0-smoothstep(0.45,0.76,age));
+            float height = 0.055 + 0.19*rise*uEruption.x;
+            float altitude = dot(pos,axis)-(CORE_RADIUS-0.01);
+            float along = clamp(altitude / height,0.0,1.0);
+            vec3 bend = tangent * (0.065*sin(along*2.8-age*2.0)*along*rise);
+            vec3 lateral = pos-axis*dot(pos,axis)-bend;
+            float width = mix(0.080,0.020,along);
+            float tube = exp(-dot(lateral,lateral)/(width*width));
+            float tip = 1.0-smoothstep(height*0.6,height,altitude);
+            float root = smoothstep(-0.06,0.015,altitude);
+            // The neck thins as the outer knot lifts free of the surface.
+            float release = smoothstep(0.42,0.65,age);
+            plasma += tube*tip*root*life*(1.0-release*0.85)*uEruption.x*cycleFade*uEruption.w;
+            vec3 knot = axis*(CORE_RADIUS+(0.18*rise+0.10*release)*uEruption.x)
+                + tangent*(0.045*rise+0.035*release);
+            vec3 offset = pos-knot;
+            float radial = dot(offset,axis);
+            vec3 crossSection = offset-axis*radial;
+            float cloud = exp(-dot(crossSection,crossSection)/0.0020
+                -radial*radial/0.0038);
+            float escape = smoothstep(0.30,0.50,age)*(1.0-smoothstep(0.60,0.92,age));
+            plasma += cloud*escape*0.9*uEruption.x*cycleFade*uEruption.w;
+        }
+    }
+    shell = max(shell,plasma);
+    float interiorMask = uInterior * (1.0-smoothstep(0.34,0.51,r));
+    if (shell < 0.006 && interiorMask < 0.006) return Sample(0.0, 0.0);
 
     vec3 w = warp(pos * 2.55, t);
+
+    // Two curved currents at different depths. Empty space remains between them;
+    // no uniform fog or extra inner shell fills the centre. Both follow the same
+    // domain warp as the surface, and the raymarch naturally occludes them.
+    float innerEnergy = 0.0;
+    if (interiorMask > 0.006) {
+        vec3 q = pos + (w-pos*2.55)*0.22;
+        float clock = t*0.065;
+        vec2 first = vec2(q.y-0.11*sin(q.x*7.0+clock),
+                         q.z-0.10-0.075*cos(q.x*6.0-clock*0.8));
+        vec2 second = vec2(q.x-0.13*cos(q.y*6.5-clock*0.7),
+                          q.z+0.13-0.06*sin(q.y*8.0+clock));
+        float strands = exp(-dot(first,first)/0.0015)
+                      + 0.72*exp(-dot(second,second)/0.0012);
+        float texture = 0.45+0.55*vnoise(w*7.0+vec3(0.0,t*0.14,0.0));
+        innerEnergy = strands*texture*interiorMask;
+    }
+
+    if (shell < 0.006) return Sample(innerEnergy*3.6,innerEnergy*0.65);
 
     // Ridges cubed: the filaments have to dominate, or the volume reads as wool.
     float veins = ridged(w * 1.6 + vec3(0.0, t * 0.09, 0.0));
@@ -153,7 +222,7 @@ Sample volume(vec3 pos, float t) {
 
     float density = shell * (veins * 1.85 + body * 0.16);
     density = max(0.0, density - 0.055) * 4.4;
-    return Sample(density, veins * shell);
+    return Sample(density+innerEnergy*3.6, max(veins*shell,innerEnergy*0.65));
 }
 
 void main() {
@@ -167,12 +236,12 @@ void main() {
     float transmittance = 1.0;
 
     float b = dot(origin, direction);
-    float c = dot(origin, origin) - CORE_BOUND * CORE_BOUND;
+    float c = dot(origin, origin) - CORE_BOUND * CORE_BOUND * uCoreSize * uCoreSize;
     float h = b * b - c;
     // Rays that miss the core still carry motes, so this only skips the march.
     float span = 0.0;
     float near = 0.0;
-    const int STEPS = 56;
+    const int STEPS = 80;
     if (h > 0.0) {
     h = sqrt(h);
     near = -b - h;
@@ -190,12 +259,12 @@ void main() {
         float heat = clamp(s.veins * 2.4, 0.0, 1.0);
         vec3 emission = mix(uDeep, uMid, 0.40 + 0.60 * heat);
         emission = mix(emission, uHot, heat * heat);
-
-        colour += emission * s.density * transmittance * span * 1.35;
+        colour += emission * s.density * transmittance * span * 1.35 * uEnergy;
         transmittance *= exp(-s.density * span * 0.85);
         if (transmittance < 0.015) break;
     }
     }
+
 
 
 
@@ -209,6 +278,34 @@ void main() {
     frag = vec4(mapped * alpha, alpha);
 }
 """
+
+_CORE_FOCUS = """
+#version 330 core
+in vec2 uv;
+out vec4 frag;
+uniform sampler2D uSource;
+uniform float uDefinition;
+void main() {
+    vec2 texel = 2.0 / vec2(textureSize(uSource,0));
+    vec4 center = texture(uSource,uv);
+    vec4 soft = center*0.25;
+    soft += texture(uSource,uv+vec2(texel.x,0))*0.125;
+    soft += texture(uSource,uv-vec2(texel.x,0))*0.125;
+    soft += texture(uSource,uv+vec2(0,texel.y))*0.125;
+    soft += texture(uSource,uv-vec2(0,texel.y))*0.125;
+    soft += texture(uSource,uv+texel)*0.0625;
+    soft += texture(uSource,uv-texel)*0.0625;
+    soft += texture(uSource,uv+vec2(texel.x,-texel.y))*0.0625;
+    soft += texture(uSource,uv+vec2(-texel.x,texel.y))*0.0625;
+    // Local contrast only: preserve the original volume, animation and palette.
+    // Fade in on luminous material to avoid ringing around the transparent edge.
+    float strength = uDefinition*1.15*smoothstep(0.025,0.16,center.a);
+    vec4 focused = max(vec4(0),center+(center-soft)*strength);
+    float alpha = clamp(max(focused.a,max(focused.r,max(focused.g,focused.b))),0.0,1.0);
+    frag = vec4(clamp(focused.rgb,vec3(0),vec3(alpha)),alpha);
+}
+"""
+
 
 _BRIGHT_BLUR = """
 #version 330 core
@@ -270,6 +367,7 @@ uniform float uTime;
 uniform float uAmplitude;
 uniform float uSize;
 uniform vec4 uMotion;
+uniform vec4 uMesh;
 uniform vec3 uHover;
 uniform vec2 uVoice0;
 uniform vec2 uVoice1;
@@ -299,15 +397,17 @@ void main() {
     vec3 normal = vec3(sin(lat)*cos(longitude), cos(lat), sin(lat)*sin(longitude));
     // Smooth waves in spherical coordinates inherited from a continuous 3D field.
     // Every point keeps its neighbours; no seam at longitude zero or polar noise.
-    float frequency = 10.0 + uMotion.w * 0.65;
+    float frequency = (10.0 + uMotion.w * 0.65)*uMesh.y;
     float wave = 0.52 * sin(dot(normal, vec3(1.0,0.7,0.4))*frequency-uTime)
                + 0.30 * sin(dot(normal, vec3(-0.3,1.0,0.8))*frequency*1.45+uTime*0.73)
                + 0.18 * sin(dot(normal, vec3(0.8,-0.4,1.0))*frequency*1.9-uTime*0.51);
     float swell = uMotion.x + uAmplitude * uMotion.y;
     float sound = voiceWave(normal,uVoice0) + voiceWave(normal,uVoice1)
                 + voiceWave(normal,uVoice2) + voiceWave(normal,uVoice3);
-    float radius = 0.88 * (1.0 + swell * wave + uAmplitude * 0.008
-        + clamp(sound * 0.035,-0.045,0.045));
+    // Lift the resting surface and its voice response by the same proportion.
+    float surfaceDisplacement = swell * wave + uAmplitude * 0.008
+        + clamp(sound * 0.035,-0.045,0.045)*uMesh.w;
+    float radius = 0.88 * (1.0 + 1.7 * surfaceDisplacement * uMesh.x);
     // A bounded tangential current bends the rows into liquid ribbons.
     vec3 current = vec3(normal.y*normal.z, -normal.x*normal.z, normal.x*normal.y);
     vec3 pos = radius * normalize(normal + current * sin(uTime*0.38) * 0.025);
@@ -326,7 +426,7 @@ void main() {
     projected -= offset * influence * 0.055;
     pearlDepth = depth;
     pearlCrest = clamp(0.5 + 0.5*wave + 0.28*abs(sound) + 0.20*influence,0.0,1.0);
-    float reach = max(0.85, uSize * 0.0027) * (0.72 + 0.28 * depth);
+    float reach = uMesh.z * max(0.85, uSize * 0.0027) * (0.72 + 0.28 * depth);
     gl_Position = vec4(projected + pearlUV * reach * 2.0 / uSize, 0, 1);
 }
 """
@@ -399,6 +499,7 @@ class _ShaderCore:
         self._context: QOpenGLContext | None = None
         self._vao: QOpenGLVertexArrayObject | None = None
         self._raymarch: QOpenGLShaderProgram | None = None
+        self._focus: QOpenGLShaderProgram | None = None
         self._blur: QOpenGLShaderProgram | None = None
         self._composite: QOpenGLShaderProgram | None = None
         self._scene: QOpenGLFramebufferObject | None = None
@@ -412,6 +513,11 @@ class _ShaderCore:
         self._hover = (0.0, 0.0, 0.0)
         self._voice_waves: tuple[tuple[float, float], ...] = ()
         self._clock = 0.0
+        self._options: OrbProfile | None = None
+        self._mesh_color = None
+        self._definition = 3.5
+        self._interior = 1.0
+        self._colour_boost = 1.0
 
     # ------------------------------------------------------------------ Setup
 
@@ -449,6 +555,7 @@ class _ShaderCore:
         self._context = context
         self._raymarch = self._program(_RAYMARCH.replace("__NOISE__", _NOISE), "raymarch")
         self._pearls = self._program(_PEARL_FRAGMENT, "pearls", _PEARL_VERTEX)
+        self._focus = self._program(_CORE_FOCUS, "core focus")
         self._blur = self._program(_BRIGHT_BLUR, "blur")
         self._composite = self._program(_COMPOSITE, "composite")
         self._vao = QOpenGLVertexArrayObject()
@@ -540,13 +647,50 @@ class _ShaderCore:
         program.setUniformValue1f("uTurbulence", float(turbulence))
         program.setUniformValue1f("uFlow", float(flow))
         program.setUniformValue1f("uAmplitude", float(amplitude))
+        options = self._options or OrbProfile()
+        program.setUniformValue1f("uInterior", self._interior)
+        program.setUniformValue1f("uCoreSize", options.core_size)
+        program.setUniformValue1f("uEnergy", options.energy)
+        program.setUniformValue(
+            "uEruption",
+            QVector4D(
+                options.eruption_size,
+                options.eruption_rate,
+                options.eruption_speed,
+                options.eruption_energy,
+            ),
+        )
         program.setUniformValue("uDeep", _vector(palette.glow, 0.55))
         program.setUniformValue("uMid", _vector(palette.core, 1.0))
-        program.setUniformValue("uHot", _vector(palette.core, 1.0, whiten=0.62))
+        program.setUniformValue(
+            "uHot",
+            _vector(palette.core, 1.0, whiten=options.white),
+        )
         functions.glDrawArrays(_GL_TRIANGLES, 0, 3)
         program.release()
-        self._pass_pearls(functions, palette, amplitude)
         scene.release()
+        if self._definition > 0.0 and not isinstance(self, _ShaderRays):
+            self._pass_focus(functions)
+        assert self._scene is not None
+        self._scene.bind()
+        self._pass_pearls(functions, palette, amplitude)
+        self._scene.release()
+
+    def _pass_focus(self, functions) -> None:
+        source, target, program = self._scene, self._final, self._focus
+        assert source is not None and target is not None and program is not None
+        target.bind()
+        functions.glViewport(0, 0, self._size, self._size)
+        program.bind()
+        functions.glActiveTexture(_GL_TEXTURE0)
+        functions.glBindTexture(_GL_TEXTURE_2D, source.texture())
+        program.setUniformValue1i("uSource", 0)
+        program.setUniformValue1f("uDefinition", self._definition)
+        functions.glDrawArrays(_GL_TRIANGLES, 0, 3)
+        program.release()
+        target.release()
+        # Reuse the two full-size buffers; the pearl mesh is added after focus.
+        self._scene, self._final = target, source
 
     def _pass_pearls(self, functions, palette: StatePalette, amplitude: float) -> None:
         program = self._pearls
@@ -563,8 +707,22 @@ class _ShaderCore:
         for index in range(4):
             pulse = self._voice_waves[index] if index < len(self._voice_waves) else (0.0, 0.0)
             program.setUniformValue(f"uVoice{index}", QVector2D(*pulse))
-        program.setUniformValue("uMid", _vector(palette.core))
-        program.setUniformValue("uHot", _vector(palette.core, whiten=0.94))
+        options = self._options or OrbProfile()
+        program.setUniformValue(
+            "uMesh",
+            QVector4D(
+                options.mesh_amplitude,
+                options.mesh_frequency,
+                options.bead_size,
+                options.voice_waves,
+            ),
+        )
+        tint = self._mesh_color or palette.core
+        program.setUniformValue("uMid", _vector(tint, options.mesh_light))
+        program.setUniformValue(
+            "uHot",
+            _vector(tint, options.mesh_light, whiten=options.mesh_white),
+        )
         functions.glDrawArrays(_GL_TRIANGLES, 0, 112 * 224 * 6)
         program.release()
         functions.glDisable(_GL_BLEND)
@@ -610,7 +768,7 @@ class _ShaderCore:
         functions.glActiveTexture(_GL_TEXTURE0 + 1)
         functions.glBindTexture(_GL_TEXTURE_2D, bloom.texture())
         program.setUniformValue1i("uBloom", 1)
-        program.setUniformValue1f("uBloomGain", 0.42)
+        program.setUniformValue1f("uBloomGain", self._options.bloom if self._options else 0.42)
         functions.glDrawArrays(_GL_TRIANGLES, 0, 3)
         program.release()
         image = final.toImage()
@@ -671,12 +829,27 @@ def render_orb(
     phase: float = 0.0,
     hover: tuple[float, float, float] = (0.0, 0.0, 0.0),
     voice_waves: tuple[tuple[float, float], ...] = (),
+    colour_boost: bool = True,
+    options: OrbProfile | None = None,
 ) -> QImage | None:
     """Render one whole orb — core and mote shell — or ``None`` without a GPU."""
 
+    active = options or OrbProfile(white=0.54 if colour_boost else 0.62)
+    _CORE._options = active
+    _CORE._mesh_color = (
+        QColor(active.mesh_color) if active.mesh_color else palette.core
+    )
+    _CORE._definition = active.focus
+    _CORE._interior = active.interior
+    palette = replace(
+        palette,
+        core=QColor(active.core_color) if active.core_color else palette.core,
+        glow=QColor(active.shadow_color) if active.shadow_color else palette.glow,
+    )
     _CORE._motion = motion
     _CORE._phase = phase
     _CORE._hover = hover
     _CORE._voice_waves = voice_waves
     _CORE._clock = seconds
+    _CORE._colour_boost = 1.0 if colour_boost else 0.0
     return _CORE.render(size, palette, seconds, turbulence, flow, amplitude)

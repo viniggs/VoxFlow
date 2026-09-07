@@ -3,6 +3,7 @@
 Run: .venv/Scripts/python.exe scripts/preview_friday.py
 Voice simulation is off until the user clicks "Simular voz".
 Capture: append --capture to write previews to build/friday-preview.
+Studio: append --studio to open the live orb customizer without touching the app config.
 """
 from __future__ import annotations
 
@@ -11,11 +12,14 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, Signal
-from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton, QWidget
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
+from voxflow.orb_settings import OrbStudioConfig
 from voxflow.ui.conversation import ConversationOverlay
+from voxflow.ui.cosmos import CosmicPanel
+from voxflow.ui.orb_studio import OrbStudio
 from voxflow.ui.status_window import StatusWindow
-from voxflow.ui.theme import VisualState
+from voxflow.ui.theme import APP_STYLE_SHEET, TEXT_MUTED, VisualState, rgba
 
 
 class PreviewSignals(QObject):
@@ -28,6 +32,25 @@ class PreviewSignals(QObject):
 
 def main() -> None:
     app = QApplication.instance() or QApplication(sys.argv)
+    app.setStyleSheet(APP_STYLE_SHEET)
+    if '--studio' in sys.argv:
+        window = CosmicPanel(radius=22.0, density=0.42, brightness=0.42)
+        window.setWindowTitle('Friday — Estúdio do Orbe (prévia)')
+        window.resize(1180, 900)
+        layout = QVBoxLayout(window)
+        layout.setContentsMargins(32, 24, 32, 28)
+        title = QLabel('ESTÚDIO DO ORBE · PRÉVIA')
+        title.setStyleSheet(
+            f'color: {rgba(TEXT_MUTED)}; font-size: 11px; font-weight: 700; '
+            'letter-spacing: 4px; background: transparent;'
+        )
+        layout.addWidget(title)
+        studio = OrbStudio(OrbStudioConfig(), window)
+        studio.save_requested.connect(lambda _config: studio.mark_saved())
+        layout.addWidget(studio, 1)
+        window.show()
+        app.exec()
+        return
     signals = PreviewSignals()
     conversation = '--conversation' in sys.argv
     if conversation:

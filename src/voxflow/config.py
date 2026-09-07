@@ -10,6 +10,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from voxflow.orb_settings import OrbStudioConfig
 from voxflow.paths import AppPaths, get_app_paths
 
 
@@ -34,6 +35,7 @@ class AudioConfig(StrictModel):
     input_device: str = "SteelSeries Sonar"
     sample_rate: int = 16_000
     vad_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    speech_start_ms: int = Field(default=300, ge=100, le=1500)
     endpoint_silence_ms: int = Field(default=700, ge=100)
     preroll_ms: int = Field(default=300, ge=0)
     minimum_recording_ms: int = Field(default=400, ge=100)
@@ -112,6 +114,7 @@ class HermesConfig(StrictModel):
 
 
 class AppConfig(StrictModel):
+    orb: OrbStudioConfig = Field(default_factory=OrbStudioConfig)
     schema_version: int = 1
     general: GeneralConfig = Field(default_factory=GeneralConfig)
     hotkeys: HotkeysConfig = Field(default_factory=HotkeysConfig)

@@ -106,6 +106,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     controller.signals.status_changed.connect(tray.set_status)
     controller.signals.history_changed.connect(history_window.refresh)
     settings_window.saved.connect(controller.apply_config)
+    controller.signals.recording_level_changed.connect(settings_window.feed_microphone)
     settings_window.history_requested.connect(history_window.show_and_refresh)
     settings_window.hermes_action_requested.connect(controller.request_hermes_action)
     settings_window.voice_changed.connect(conversation.set_voice)

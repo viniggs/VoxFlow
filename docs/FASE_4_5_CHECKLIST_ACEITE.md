@@ -123,3 +123,27 @@ Data: 2026-09-07
   ele mantém a parte final, que é a que ainda está sendo escrita.
 - [ ] Confirmar que a interface continua fluida enquanto ela pensa — sem travadinhas no
   orbe ou nas estrelas.
+
+---
+
+# VoxFlow 0.7.2 — Estúdio do Orbe
+
+Data: 2026-09-07
+
+- [ ] Instalar `VoxFlow-0.7.2-fase-4.5-setup.exe` por cima.
+- [ ] Abrir Ajustes → **Estúdio do Orbe** e confirmar que a prévia aparece sem mover o
+  restante da janela.
+- [ ] Trocar **Editar** entre um estado e **Todos juntos**; confirmar que a seleção
+  individual preserva as diferenças e que Todos juntos aplica apenas o controle movido.
+- [ ] Arrastar cada color picker e confirmar que núcleo, sombras e malha mudam na hora.
+- [ ] Ajustar foco, correntes internas, amplitude/frequência da malha e tamanho das
+  bolinhas; confirmar atualização ao vivo na prévia GPU.
+- [ ] Ajustar intensidade, alcance, velocidade e frequência das **Erupções de plasma**;
+  confirmar que a frequência muda a cadência e alcance muda o tamanho das expulsões.
+- [ ] Escolher **Simular fala** e mover o nível; confirmar ondas subindo e descendo sem
+  alterar o repouso. Escolher **Sem voz** e confirmar que elas param.
+- [ ] Salvar o orbe, fechar/reabrir Ajustes e confirmar que os valores permanecem.
+- [ ] Usar **Voltar ao salvo** e **Restaurar padrão**; confirmar que cada ação atualiza
+  a prévia e os controles.
+- [ ] Confirmar que a aba Áudio mantém os controles de sensibilidade, início da fala,
+  silêncio de encerramento e pré-roll.

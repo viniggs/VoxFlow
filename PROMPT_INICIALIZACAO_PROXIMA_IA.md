@@ -98,3 +98,13 @@ do código e qualquer log ou nota daquela entrega. Não largue arquivos soltos n
 fase: uma fase acumula correções e a pasta vira um monte onde não se distingue qual ZIP
 acompanha qual instalador. O `scripts/build-release.ps1` já grava no lugar certo; ele
 aceita fase fracionada (`-Phase 4.5`).
+
+## Continuação visual já implementada
+
+O `Estúdio do Orbe` foi concluído no código-fonte em 2026-09-07, ainda sem commit,
+instalador ou atualização da instalação. Ele fica na aba homônima das configurações e
+também pode ser aberto isoladamente com `scripts/preview_friday.py --studio`. A prévia
+é ao vivo e usa os mesmos uniforms GPU do orbe principal; não remova essa ligação ao
+alterar o editor. O modelo está em `src/voxflow/orb_settings.py` e o editor em
+`src/voxflow/ui/orb_studio.py`. O próximo agente deve preservar seleção por estado,
+`Todos juntos`, color pickers ao vivo, salvar/resetar e os controles de erupção e voz.
