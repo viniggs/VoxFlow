@@ -269,3 +269,41 @@ Data: 2026-09-07
 - [ ] Mandar só o `.exe` e confirmar com ele: SmartScreen pede "Executar assim mesmo";
   o assistente aparece; o botão de instalar plugin funciona; o Whisper baixa sozinho na
   primeira transcrição.
+
+---
+
+# VoxFlow 0.7.6 — Modo de escuta e atalhos configuráveis
+
+Data: 2026-09-07
+
+## O modo de escuta
+
+- [ ] Ajustes → Hermes → **Como ela ouve** = *Push-to-talk*. Abrir a Friday, **falar sem
+  segurar nada** e confirmar que ela **não responde**.
+- [ ] Ainda em push-to-talk: segurar o atalho, falar, soltar. Confirmar que responde.
+- [ ] Ainda em push-to-talk: enquanto ela fala, **falar por cima sem segurar** e
+  confirmar que ela **não** é interrompida.
+- [ ] Voltar para *Fala contínua* e confirmar que ela volta a ouvir sozinha.
+- [ ] Em fala contínua, segurar o atalho e falar: confirmar que **ainda funciona** e que
+  o silêncio no meio não corta a frase.
+
+## Atalhos configuráveis
+
+- [ ] Ajustes → **Atalhos**: clicar em "Segurar para falar com a Friday", pressionar
+  `Ctrl + A`, salvar. Confirmar que o campo diz *continua funcionando normalmente*.
+- [ ] No Bloco de Notas, confirmar que `Ctrl + A` **ainda seleciona tudo** e que
+  segurá-lo também fala com a Friday.
+- [ ] Confirmar que o `+` do numpad **voltou a escrever** depois da troca.
+- [ ] Voltar o atalho para `Num +` e confirmar que o campo avisa *esta tecla deixará de
+  digitar*, e que ela realmente para de escrever.
+- [ ] Usar **Remover** num atalho e confirmar que a tecla volta ao Windows e a função
+  fica sem atalho.
+- [ ] Trocar "Mínimo para valer a pressionada" para 1500 ms e confirmar que toques mais
+  curtos passam a ser ignorados.
+
+## O ponto a decidir
+
+- [ ] Com o ditado ainda em `Ctrl + Numpad +`, ditar dentro do Chrome. **Verificar se a
+  página dá zoom junto.** Se der, me avisar: a regra "só engolir tecla que escreve
+  sozinha" foi implementada como pedida, e é isso que deixa o `Ctrl +` chegar no
+  navegador. Inverter é rápido.

@@ -14,6 +14,7 @@ import pytest
 from voxflow import app as app_module
 from voxflow.app import ControllerSignals, DictationState, HermesState, VoxFlowController
 from voxflow.audio.capture import AudioClip
+from voxflow.audio.vad import VADEvent
 from voxflow.config import AppConfig
 
 
@@ -233,7 +234,7 @@ def test_a_short_tap_while_she_starts_leaves_her_starting(controller) -> None:
 
     gateway(controller, ok=True)
     assert controller._dispatched == []
-    assert controller._listening == ["fale ou segure + do teclado numérico; F9 encerra"]
+    assert controller._listening == [controller._listening_hint()]
 
 
 def test_the_key_defers_to_a_dictation_still_in_flight(controller) -> None:
@@ -257,3 +258,76 @@ def test_pressing_while_she_speaks_interrupts_her(controller) -> None:
     assert controller._speaker.interrupted == 1
     assert controller._hermes_state is HermesState.LISTENING
     assert controller._audio.started
+
+
+# --- continuous versus push-to-talk ----------------------------------------------
+
+
+class ListeningVAD:
+    """A detector that reports speech the moment it is asked."""
+
+    def __init__(self) -> None:
+        self.fed = 0
+
+    def reset(self) -> None:
+        pass
+
+    def feed_level(self, rms: float, ms: int) -> VADEvent:
+        del rms, ms
+        self.fed += 1
+        return VADEvent.SPEECH_STARTED
+
+
+def listening_controller(controller):
+    controller._vad = ListeningVAD()
+    controller._barge_vad = ListeningVAD()
+    controller._audio = FakeAudio(clip(), recording=False)
+    controller._audio.current_rms = lambda: 0.5  # type: ignore[method-assign]
+    controller._hermes_state = HermesState.LISTENING
+    return controller
+
+
+def test_continuous_mode_lets_her_open_a_turn_by_herself(controller) -> None:
+    listening_controller(controller)
+    controller._config.hermes.listen_mode = "continuous"
+    controller._hermes_tick()
+    assert controller._vad.fed == 1
+    assert controller._audio.started
+
+
+def test_push_to_talk_mode_stops_her_listening_on_her_own(controller) -> None:
+    listening_controller(controller)
+    controller._config.hermes.listen_mode = "push_to_talk"
+    controller._hermes_tick()
+    # The detector is never even consulted, so a noisy room cannot open a turn.
+    assert controller._vad.fed == 0
+    assert not controller._audio.started
+
+
+def test_push_to_talk_mode_also_stops_barge_in(controller) -> None:
+    listening_controller(controller)
+    controller._hermes_state = HermesState.SPEAKING
+    controller._config.hermes.listen_mode = "push_to_talk"
+    controller._hermes_tick()
+    assert controller._barge_vad.fed == 0
+    assert controller._speaker.interrupted == 0
+
+
+def test_the_key_still_works_in_continuous_mode(controller) -> None:
+    # Choosing continuous must not turn the shortcut into dead weight: it stays an
+    # override for a noisy room or a pause for thought.
+    controller._config.hermes.listen_mode = "continuous"
+    controller._audio = FakeAudio(clip(), recording=False)
+    press(controller)
+    assert controller._talk_active
+    assert controller._audio.started
+    release_after(controller, 2.0)
+    assert len(controller._dispatched) == 1
+
+
+def test_a_held_key_outranks_the_detector_in_continuous_mode(controller) -> None:
+    listening_controller(controller)
+    controller._config.hermes.listen_mode = "continuous"
+    controller._talk_active = True
+    controller._hermes_tick()
+    assert controller._vad.fed == 0

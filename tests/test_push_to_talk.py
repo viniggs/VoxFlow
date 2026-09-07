@@ -1,13 +1,22 @@
-"""Push-to-talk shares the numpad + key with dictation and with typing.
+"""Who owns a key press, and whether the rest of Windows still sees it.
 
-The rules that decide who owns a key press are the risky part: get them wrong and the
-key either stops typing "+" everywhere or never reaches Friday. They are exercised
-here directly, without a real Windows hook.
+The suppression rule is the user's: a binding may only swallow a key when that key,
+pressed alone, would have typed something. A chord passes through, so binding
+``ctrl+a`` costs nobody the use of Ctrl.
 """
 
 from __future__ import annotations
 
-from voxflow.hotkeys import VK_ADD, VK_CONTROL, VK_ESCAPE, VK_F9, NativeHoldHotkey
+import pytest
+
+from voxflow.hotkeys import NativeHoldHotkey
+from voxflow.keys import parse
+
+VK_ADD = 0x6B
+VK_CONTROL = 0x11
+VK_ESCAPE = 0x1B
+VK_F9 = 0x78
+VK_A = 0x41
 
 
 class Recorder:
@@ -21,7 +30,7 @@ class Recorder:
         return callback
 
 
-def build() -> tuple[NativeHoldHotkey, Recorder]:
+def build(**bindings: str) -> tuple[NativeHoldHotkey, Recorder]:
     recorder = Recorder()
     hotkey = NativeHoldHotkey(
         recorder.make("press"),
@@ -32,6 +41,9 @@ def build() -> tuple[NativeHoldHotkey, Recorder]:
         recorder.make("talk_release"),
         recorder.make("talk_cancel"),
     )
+    if bindings:
+        hotkey.set_bindings(**bindings)
+    hotkey.set_talk_armed(True)
     return hotkey, recorder
 
 
@@ -43,75 +55,157 @@ def up(hotkey: NativeHoldHotkey, key: int) -> bool:
     return hotkey._handle_key(key, False, True)
 
 
-def test_the_key_can_be_given_back_to_windows() -> None:
-    # Emptying `hotkeys.hermes_push_to_talk` is the way out for anyone who wants the
-    # numpad + to keep typing. Unarmed, the hook must not touch the key at all.
-    hotkey, recorder = build()
-    assert down(hotkey, VK_ADD) is False
-    assert up(hotkey, VK_ADD) is False
-    assert recorder.events == []
+# --- the suppression rule --------------------------------------------------------
 
 
-def test_bare_plus_talks_to_friday() -> None:
-    hotkey, recorder = build()
-    hotkey.set_talk_armed(True)
+def test_a_bare_typing_key_is_swallowed() -> None:
+    # Otherwise holding it to talk would also fill the document with "+".
+    hotkey, recorder = build(push_to_talk="num_add")
     assert down(hotkey, VK_ADD) is True
     assert up(hotkey, VK_ADD) is True
     assert recorder.events == ["talk_press", "talk_release"]
 
 
+def test_a_chord_reaches_the_application() -> None:
+    # Binding ctrl+a must not cost anybody select-all, nor the use of Ctrl.
+    hotkey, recorder = build(push_to_talk="ctrl+a")
+    down(hotkey, VK_CONTROL)
+    assert down(hotkey, VK_A) is False
+    assert up(hotkey, VK_A) is False
+    assert recorder.events == ["talk_press", "talk_release"]
+
+
+def test_modifier_keys_are_never_swallowed() -> None:
+    hotkey, _ = build(push_to_talk="ctrl+a")
+    assert down(hotkey, VK_CONTROL) is False
+    assert up(hotkey, VK_CONTROL) is False
+
+
+def test_a_bare_key_that_types_nothing_is_left_alone() -> None:
+    hotkey, recorder = build(hermes_toggle="f9")
+    assert down(hotkey, VK_F9) is False
+    assert up(hotkey, VK_F9) is False
+    assert recorder.events == ["toggle"]
+
+
+def test_an_unbound_key_is_untouched() -> None:
+    hotkey, recorder = build(push_to_talk="", dictation_hold="", hermes_toggle="")
+    assert down(hotkey, VK_ADD) is False
+    assert up(hotkey, VK_ADD) is False
+    assert recorder.events == []
+
+
+# --- telling two bindings on the same key apart ----------------------------------
+
+
+def test_the_chord_and_the_bare_key_do_not_collide() -> None:
+    hotkey, recorder = build(dictation_hold="ctrl+num_add", push_to_talk="num_add")
+    down(hotkey, VK_CONTROL)
+    down(hotkey, VK_ADD)
+    up(hotkey, VK_ADD)
+    up(hotkey, VK_CONTROL)
+    assert recorder.events == ["press", "release"]
+
+    down(hotkey, VK_ADD)
+    up(hotkey, VK_ADD)
+    assert recorder.events == ["press", "release", "talk_press", "talk_release"]
+
+
+def test_an_extra_modifier_does_not_count_as_the_bare_key() -> None:
+    hotkey, recorder = build(push_to_talk="num_add", dictation_hold="")
+    down(hotkey, VK_CONTROL)
+    assert down(hotkey, VK_ADD) is False
+    assert recorder.events == []
+
+
+# --- holding ---------------------------------------------------------------------
+
+
 def test_holding_the_key_only_opens_one_turn() -> None:
-    hotkey, recorder = build()
-    hotkey.set_talk_armed(True)
+    hotkey, recorder = build(push_to_talk="num_add")
     for _ in range(5):
         down(hotkey, VK_ADD)
     up(hotkey, VK_ADD)
     assert recorder.events == ["talk_press", "talk_release"]
 
 
-def test_dictation_combo_survives_the_new_binding() -> None:
-    hotkey, recorder = build()
-    hotkey.set_talk_armed(True)
+def test_letting_go_of_the_modifier_first_still_ends_the_hold() -> None:
+    hotkey, recorder = build(dictation_hold="ctrl+num_add")
     down(hotkey, VK_CONTROL)
-    assert down(hotkey, VK_ADD) is True
-    assert up(hotkey, VK_ADD) is True
+    down(hotkey, VK_ADD)
     up(hotkey, VK_CONTROL)
+    up(hotkey, VK_ADD)
     assert recorder.events == ["press", "release"]
 
 
 def test_disarming_mid_hold_still_closes_the_turn() -> None:
-    # F9 during a hold: the press already happened, so the release has to land or the
-    # recording would stay open with nothing left to close it.
-    hotkey, recorder = build()
-    hotkey.set_talk_armed(True)
+    hotkey, recorder = build(push_to_talk="num_add")
     down(hotkey, VK_ADD)
     hotkey.set_talk_armed(False)
     assert up(hotkey, VK_ADD) is True
     assert recorder.events == ["talk_press", "talk_release"]
 
 
-def test_escape_discards_the_hold_and_eats_the_key_up() -> None:
-    hotkey, recorder = build()
-    hotkey.set_talk_armed(True)
+# --- cancelling ------------------------------------------------------------------
+
+
+def test_escape_discards_a_hold_without_taking_the_key() -> None:
+    hotkey, recorder = build(push_to_talk="num_add")
     down(hotkey, VK_ADD)
-    assert down(hotkey, VK_ESCAPE) is True
+    # Esc types nothing, so it still reaches whatever has focus.
+    assert down(hotkey, VK_ESCAPE) is False
+    # The key-up of a swallowed hold is still eaten, or a stray "+" would land.
     assert up(hotkey, VK_ADD) is True
     assert recorder.events == ["talk_press", "talk_cancel"]
-    # And the key is free again straight afterwards.
     assert down(hotkey, VK_ADD) is True
     assert recorder.events[-1] == "talk_press"
 
 
-def test_escape_outside_a_hold_reaches_the_application() -> None:
+def test_escape_after_a_chord_hold_leaves_no_key_to_eat() -> None:
+    hotkey, recorder = build(push_to_talk="ctrl+a")
+    down(hotkey, VK_CONTROL)
+    down(hotkey, VK_A)
+    down(hotkey, VK_ESCAPE)
+    assert up(hotkey, VK_A) is False
+    assert recorder.events == ["talk_press", "talk_cancel"]
+
+
+def test_escape_outside_a_hold_does_nothing() -> None:
     hotkey, recorder = build()
-    hotkey.set_talk_armed(True)
     assert down(hotkey, VK_ESCAPE) is False
     assert recorder.events == []
 
 
-def test_toggle_key_is_untouched() -> None:
-    hotkey, recorder = build()
-    hotkey.set_talk_armed(True)
-    assert down(hotkey, VK_F9) is True
-    assert up(hotkey, VK_F9) is True
-    assert recorder.events == ["toggle"]
+# --- rebinding -------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("ctrl+num_add", "ctrl+num_add"),
+        ("CTRL + A", "ctrl+a"),
+        ("f9", "f9"),
+        ("ctrl+alt+shift+delete", "ctrl+alt+shift+delete"),
+    ],
+)
+def test_bindings_survive_a_round_trip(text: str, expected: str) -> None:
+    hotkey = parse(text)
+    assert hotkey is not None
+    assert hotkey.text() == expected
+
+
+def test_nonsense_unbinds_rather_than_crashing() -> None:
+    hotkey, recorder = build(push_to_talk="ctrl+banana")
+    assert down(hotkey, VK_ADD) is False
+    assert recorder.events == []
+
+
+def test_rebinding_takes_effect_immediately() -> None:
+    hotkey, recorder = build(push_to_talk="num_add")
+    down(hotkey, VK_ADD)
+    up(hotkey, VK_ADD)
+    hotkey.set_bindings(push_to_talk="ctrl+a")
+    assert down(hotkey, VK_ADD) is False
+    down(hotkey, VK_CONTROL)
+    assert down(hotkey, VK_A) is False
+    assert recorder.events == ["talk_press", "talk_release", "talk_press"]

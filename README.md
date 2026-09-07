@@ -10,17 +10,35 @@ e modo Hermes hands-free com raciocínio visível.
 Segure `Ctrl + Numpad +`, fale e solte. O preview aparece somente no VoxFlow;
 o texto final é inserido no aplicativo ativo depois que o atalho é solto.
 
-Pressione `F9` para entrar no modo Hermes. Fale normalmente e aguarde o silêncio
-encerrar cada turno. O painel mostra o que ela está pensando enquanto pensa, e a
-resposta conforme ela chega. Falar por cima interrompe.
+Pressione `F9` para entrar no modo Hermes. O painel mostra o que ela está pensando
+enquanto pensa, e a resposta conforme ela chega.
 
-Para decidir você mesmo quando ela ouve, segure o `+` do teclado numérico enquanto
-fala e solte para enviar. Funciona de qualquer lugar do Windows e a qualquer momento:
-com ela fechada, segurar a tecla abre a janela dela e já começa a captar; com ela
-falando, interrompe. O `+` do numpad passa a ser dela durante toda a sessão — quem
-quiser a tecla de volta é só esvaziar `hotkeys.hermes_push_to_talk` na configuração.
-Toques com menos de um segundo e gravações sem voz são descartados sem gastar um turno,
-e `Esc` durante a pressionada descarta o que foi gravado.
+Ela ouve de duas maneiras, escolhidas em Ajustes → Hermes → **Como ela ouve**:
+
+- **Fala contínua** — ela escuta sozinha e o silêncio encerra cada turno. Falar por
+  cima interrompe.
+- **Push-to-talk** — ela só escuta enquanto o atalho estiver pressionado. Nada de
+  ruído ambiente abrindo turno, e nenhuma pausa para pensar cortando a frase.
+
+O atalho de fala (por padrão o `+` do teclado numérico) **funciona nos dois modos**: no
+push-to-talk ele é a única forma de falar; na fala contínua ele é um reforço para quando
+o ambiente está barulhento ou você quer pensar no meio da frase. Ele funciona de
+qualquer lugar do Windows e a qualquer momento: com ela fechada, segurar a tecla abre a
+janela dela e já começa a captar; com ela falando, interrompe. Toques com menos de um
+segundo e gravações sem voz são descartados sem gastar um turno, e `Esc` durante a
+pressionada descarta o que foi gravado.
+
+## Atalhos
+
+Todos são configuráveis em Ajustes → **Atalhos**: clique num deles e pressione as teclas
+que quiser. Os padrões são `Ctrl + Numpad +` para ditar, `+` do numpad para falar com a
+Friday, `F9` para abrir/fechar e `Esc` para cancelar.
+
+Uma tecla sozinha que normalmente escreve — o `+` do numpad, uma letra — **deixa de
+escrever** enquanto estiver como atalho, porque não há como usá-la para as duas coisas.
+Combinações com Ctrl, Alt, Shift ou Win continuam chegando normalmente no aplicativo em
+uso, então usar `Ctrl + A` como atalho não custa a você o Ctrl nem o "selecionar tudo".
+O próprio campo avisa qual dos dois casos é o seu.
 
 O pensamento depende de um plugin instalado no Hermes, em
 `%LOCALAPPDATA%\hermes\plugins\voxflow-reasoning\`, que escreve os deltas de raciocínio

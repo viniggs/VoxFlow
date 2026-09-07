@@ -677,3 +677,58 @@ do módulo, porque o assistente precisa saber se a chave existe sem construir um
 
 Validação: Ruff aprovado, 105 testes aprovados, assistente renderizado (665×560) com as
 quatro linhas corretas numa máquina simulada sem Hermes e sem plugin.
+
+## 0.7.6 — Modo de escuta e atalhos do usuário (2026-09-07)
+
+Quatro correções pedidas pelo usuário sobre o push-to-talk de 0.7.3–0.7.5.
+
+### 1. Push-to-talk virou modo, não só um botão
+
+Era uma adição ao detector de voz: a tecla funcionava, mas a Friday continuava ouvindo
+sozinha o tempo todo, o que anulava o propósito. Agora `hermes.listen_mode` escolhe
+entre `continuous` e `push_to_talk`, em Ajustes → Hermes. No modo push-to-talk,
+`_hermes_tick` retorna antes de consultar o detector — inclusive o de barge-in, porque
+interromper também passa a ser trabalho da tecla.
+
+### 2. A tecla continua útil no modo contínuo
+
+Não é desativada: vira reforço para ambiente barulhento ou pausa para pensar. Foi
+pedido explicitamente, e há teste para isso.
+
+### 3. Atalhos configuráveis
+
+`src/voxflow/keys.py` (novo) é o modelo: `Hotkey`, `parse`, `matches`, `contains`,
+tabela de nomes de virtual-key e `types_text`. `hotkeys.py` foi reescrito em cima de
+`_Hold`/`_Tap` dirigidos por configuração, em vez de constantes. `ui/hotkey_edit.py`
+(novo) captura o acorde pressionando as teclas, e a aba **Atalhos** reúne os quatro
+atalhos mais o mínimo da pressionada.
+
+`matches` exige que os modificadores batam **exatamente**; sem isso `num_add` dispararia
+junto com `ctrl+num_add` e os dois nunca poderiam coexistir na mesma tecla.
+
+### 4. Só engole a tecla se ela escreveria sozinha
+
+Regra do usuário: `Hotkey.steals_typing` é verdadeiro apenas para tecla sem modificador
+que produz texto. Um acorde passa direto para o aplicativo em foco, então usar `ctrl+a`
+não custa o Ctrl nem o "selecionar tudo".
+
+**Consequência que o usuário precisa avaliar:** o padrão do ditado é `ctrl+num_add`, que
+agora **não é mais suprimido**. Em navegadores e editores, `Ctrl` com `+` é zoom, então
+ditar pode dar zoom na página junto. A regra foi implementada como pedida e isto está
+sinalizado; inverter é trocar um predicado.
+
+### Um bug que o teste pegou
+
+`Esc` durante um acorde nunca cancelava: `matches` exige modificadores exatos, e
+segurando `ctrl+a` o Ctrl está necessariamente pressionado. Daí `contains`, que tolera
+modificadores presos por outro motivo, usado só para o cancelamento.
+
+### Arquivos alterados
+
+`src/voxflow/keys.py` (novo), `src/voxflow/ui/hotkey_edit.py` (novo),
+`src/voxflow/hotkeys.py` (reescrito), `src/voxflow/app.py`, `src/voxflow/config.py`,
+`src/voxflow/ui/settings.py`, `tests/test_push_to_talk.py` (reescrito),
+`tests/test_push_to_talk_rules.py`, `README.md`.
+
+Validação: Ruff aprovado, 121 testes aprovados, aba Atalhos renderizada e ciclo
+salvar/ler conferido (`ctrl+a`, `f8`, 1500 ms, `push_to_talk`).

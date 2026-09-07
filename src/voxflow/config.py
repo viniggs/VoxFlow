@@ -110,6 +110,10 @@ class HermesConfig(StrictModel):
     session_key: str = "voxflow:estudo"
     conversation_id: str = "voxflow:estudo"
     half_duplex: bool = False
+    #: ``continuous`` lets the voice detector open turns by itself; ``push_to_talk``
+    #: means she only hears while the key is held. The key works in both — in
+    #: continuous mode it is an override for a noisy room or a pause for thought.
+    listen_mode: Literal["continuous", "push_to_talk"] = "continuous"
     #: Use ``/v1/runs`` (server-side session history, real cancellation) instead of
     #: ``/v1/responses``. Kept switchable so the old path is one setting away.
     use_runs_api: bool = True

@@ -19,6 +19,7 @@ from voxflow.hermes.client import HermesClient
 from voxflow.hermes.gateway import start_gateway, stop_gateway
 from voxflow.hermes.tts import EdgeSentenceSpeaker, SentenceBuffer
 from voxflow.hotkeys import NativeHoldHotkey
+from voxflow.keys import parse
 from voxflow.secrets import SecretStore
 from voxflow.storage import HistoryStore
 from voxflow.stt.base import Transcript
@@ -221,11 +222,21 @@ class VoxFlowController(QObject):
         # The key belongs to Friday for the whole session, not only while she is up:
         # the point is to reach her from whatever you happen to be typing in. Emptying
         # `hermes_push_to_talk` in the configuration gives the key back to Windows.
-        self._hotkey.set_talk_armed(bool(self._config.hotkeys.hermes_push_to_talk))
+        self._apply_bindings()
         self._hotkey.start()
         self._executor.submit(self._stt.warmup)
         logger.info("voxflow_ready phase=4.5 hotkeys=ctrl+num_add,f9,num_add")
         self._signals.status_changed.emit("Pronto — segure Ctrl + Numpad + para ditar")
+
+    def _apply_bindings(self) -> None:
+        keys = self._config.hotkeys
+        self._hotkey.set_bindings(
+            dictation_hold=keys.dictation_hold,
+            push_to_talk=keys.hermes_push_to_talk,
+            hermes_toggle=keys.hermes_toggle,
+            cancel=keys.cancel,
+        )
+        self._hotkey.set_talk_armed(bool(keys.hermes_push_to_talk.strip()))
 
     def stop(self) -> None:
         self._preview_timer.stop()
@@ -270,6 +281,8 @@ class VoxFlowController(QObject):
         if old_config.audio != config.audio:
             self._vad = self._create_vad(config)
             self._barge_vad = self._create_vad(config)
+        if old_config.hotkeys != config.hotkeys:
+            self._apply_bindings()
         self._signals.status_changed.emit("Configuração salva com sucesso")
 
     @Slot()
@@ -547,7 +560,7 @@ class VoxFlowController(QObject):
                 # running carries straight on into the turn.
                 self._enter_hermes_listening("gravando — solte para enviar")
                 return
-            self._enter_hermes_listening("fale ou segure + do teclado numérico; F9 encerra")
+            self._enter_hermes_listening(self._listening_hint())
             if pending is not None:
                 logger.info("push_to_talk_pending_dispatched audio_ms={:.0f}", pending.audio_ms)
                 self._dispatch_hermes_clip(pending)
@@ -564,6 +577,17 @@ class VoxFlowController(QObject):
         self._set_hermes_state(HermesState.LISTENING, message)
         self._hermes_timer.start()
         self._level_timer.start()
+
+    def _listening_hint(self) -> str:
+        """How to talk to her, in the words of whatever keys are actually bound."""
+
+        talk = parse(self._config.hotkeys.hermes_push_to_talk)
+        key = talk.label() if talk is not None else ""
+        if self._config.hermes.listen_mode == "push_to_talk":
+            if not key:
+                return "nenhuma tecla de fala configurada"
+            return f"segure {key} para falar"
+        return f"fale normalmente ou segure {key}" if key else "fale normalmente"
 
     def _abandon_hermes_turn(self) -> None:
         """Drop the turn in flight, and tell the gateway to drop it too.
@@ -594,6 +618,10 @@ class VoxFlowController(QObject):
         if self._talk_active:
             # The key decides when the turn ends. Letting the endpoint detector run
             # here would cut the speaker off at the first pause for thought.
+            return
+        if self._config.hermes.listen_mode == "push_to_talk":
+            # She listens only while the key is held. That includes not listening for
+            # someone talking over her: interrupting is the key's job here too.
             return
         rms = self._audio.current_rms()
         if self._hermes_state is HermesState.LISTENING:

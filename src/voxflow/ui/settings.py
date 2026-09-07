@@ -29,6 +29,7 @@ from voxflow.config import AppConfig, save_config
 from voxflow.paths import AppPaths
 from voxflow.secrets import SecretStore
 from voxflow.ui.cosmos import CosmicPanel
+from voxflow.ui.hotkey_edit import HotkeyEdit
 from voxflow.ui.orb_studio import OrbStudio
 from voxflow.ui.theme import TEXT_FAINT, TEXT_MUTED, rgba
 
@@ -48,6 +49,7 @@ class SettingsWindow(CosmicPanel):
         self._tabs = QTabWidget()
         self._build_general_tab()
         self._build_audio_tab()
+        self._build_hotkeys_tab()
         self._build_stt_tab()
         self._build_text_tab()
         self._build_hermes_tab()
@@ -222,6 +224,34 @@ class SettingsWindow(CosmicPanel):
         layout.addLayout(form)
         self._tabs.addTab(tab, "Texto")
 
+    def _build_hotkeys_tab(self) -> None:
+        tab, form = self._form_tab()
+        keys = self._config.hotkeys
+        self._key_dictation = HotkeyEdit(keys.dictation_hold)
+        self._key_talk = HotkeyEdit(keys.hermes_push_to_talk)
+        self._key_toggle = HotkeyEdit(keys.hermes_toggle)
+        self._key_cancel = HotkeyEdit(keys.cancel)
+        self._talk_minimum = QSpinBox()
+        self._talk_minimum.setRange(200, 5000)
+        self._talk_minimum.setSingleStep(100)
+        self._talk_minimum.setSuffix(" ms")
+        self._talk_minimum.setValue(keys.hermes_push_to_talk_ms)
+        form.addRow("Segurar para ditar:", self._key_dictation)
+        form.addRow("Segurar para falar com a Friday:", self._key_talk)
+        form.addRow("Abrir/fechar a Friday:", self._key_toggle)
+        form.addRow("Cancelar gravação:", self._key_cancel)
+        form.addRow("Mínimo para valer a pressionada:", self._talk_minimum)
+        note = QLabel(
+            "Clique num atalho e pressione as teclas que quiser. Uma tecla sozinha que "
+            "normalmente escreve — como o + do teclado numérico — deixa de escrever "
+            "enquanto estiver como atalho; combinações com Ctrl, Alt ou Shift continuam "
+            "chegando normalmente no aplicativo em uso."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet(f"color: {rgba(TEXT_FAINT)}; background: transparent;")
+        form.addRow(note)
+        self._tabs.addTab(tab, "Atalhos")
+
     def _build_hermes_tab(self) -> None:
         tab, form = self._form_tab()
         self._hermes_url = QLineEdit(self._config.hermes.base_url)
@@ -232,6 +262,13 @@ class SettingsWindow(CosmicPanel):
         self._conversation_id = QLineEdit(self._config.hermes.conversation_id)
         self._half_duplex = QCheckBox("Não ouvir enquanto o Hermes fala")
         self._half_duplex.setChecked(self._config.hermes.half_duplex)
+        self._listen_mode = QComboBox()
+        self._listen_mode.addItem("Fala contínua (ela escuta sozinha)", "continuous")
+        self._listen_mode.addItem(
+            "Push-to-talk (só enquanto o atalho está pressionado)", "push_to_talk"
+        )
+        index = self._listen_mode.findData(self._config.hermes.listen_mode)
+        self._listen_mode.setCurrentIndex(max(index, 0))
         self._attach_screenshot = QCheckBox("Permitir screenshot por comando")
         self._attach_screenshot.setChecked(self._config.hermes.attach_screenshot_on_command)
         self._tts_provider = QComboBox()
@@ -272,6 +309,7 @@ class SettingsWindow(CosmicPanel):
         form.addRow("Voz:", self._tts_voice)
         form.addRow("Velocidade:", self._tts_rate)
         form.addRow("Chatterbox:", self._chatterbox_path)
+        form.addRow("Como ela ouve:", self._listen_mode)
         form.addRow("Instruções do tutor:", self._hermes_instructions)
         form.addRow("Serviço:", controls)
         form.addRow("Status:", self._hermes_status)
@@ -443,9 +481,19 @@ class SettingsWindow(CosmicPanel):
                   "session_key": self._session_key.text().strip(),
                   "conversation_id": self._conversation_id.text().strip(),
                 "half_duplex": self._half_duplex.isChecked(),
+                "listen_mode": self._listen_mode.currentData(),
                 "attach_screenshot_on_command": self._attach_screenshot.isChecked(),
                 "instructions": self._hermes_instructions.toPlainText().strip(),
                 "tts": tts,
+            }
+        )
+        hotkeys = self._config.hotkeys.model_copy(
+            update={
+                "dictation_hold": self._key_dictation.value(),
+                "hermes_push_to_talk": self._key_talk.value(),
+                "hermes_toggle": self._key_toggle.value(),
+                "cancel": self._key_cancel.value(),
+                "hermes_push_to_talk_ms": self._talk_minimum.value(),
             }
         )
         return AppConfig.model_validate(
@@ -453,6 +501,7 @@ class SettingsWindow(CosmicPanel):
                 update={
                     "orb": self._studio.draft,
                     "general": general,
+                    "hotkeys": hotkeys,
                     "audio": audio,
                     "stt": stt,
                     "cleanup": cleanup,
