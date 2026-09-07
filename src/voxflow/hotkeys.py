@@ -44,11 +44,17 @@ class NativeHoldHotkey:
         on_release: Callable[[], None],
         on_cancel: Callable[[], None] | None = None,
         on_hermes_toggle: Callable[[], None] | None = None,
+        on_talk_press: Callable[[], None] | None = None,
+        on_talk_release: Callable[[], None] | None = None,
+        on_talk_cancel: Callable[[], None] | None = None,
     ) -> None:
         self._on_press = on_press
         self._on_release = on_release
         self._on_cancel = on_cancel
         self._on_hermes_toggle = on_hermes_toggle
+        self._on_talk_press = on_talk_press
+        self._on_talk_release = on_talk_release
+        self._on_talk_cancel = on_talk_cancel
         self._thread: threading.Thread | None = None
         self._thread_id = 0
         self._hook: int | None = None
@@ -58,6 +64,90 @@ class NativeHoldHotkey:
         self._ctrl_keys_down: set[int] = set()
         self._combo_down = False
         self._f9_down = False
+        # Bare numpad + only belongs to Friday while she is on screen. Outside a
+        # conversation the key has to type "+" like any other key, so the hook is
+        # gated instead of claiming the key for the whole session.
+        self._talk_armed = threading.Event()
+        self._talk_down = False
+        self._swallow_talk_up = False
+
+    def set_talk_armed(self, armed: bool) -> None:
+        """Claim (or release) bare numpad + for push-to-talk.
+
+        Called from the Qt thread while the hook thread reads the flag, which is why
+        it is an Event and not a plain attribute."""
+
+        if armed:
+            self._talk_armed.set()
+        else:
+            self._talk_armed.clear()
+
+    def _fire(self, callback: Callable[[], None] | None, failure: str) -> None:
+        if callback is None:
+            return
+        try:
+            callback()
+        except Exception:
+            logger.exception(failure)
+
+    def _handle_key(self, key: int, is_down: bool, is_up: bool) -> bool:
+        """Decide what a key event means. Returns True when the key is swallowed.
+
+        Kept apart from the hook callback so the rules — which decide whether a key
+        still reaches the rest of Windows — can be exercised without a real hook."""
+
+        if key in {VK_CONTROL, VK_LCONTROL, VK_RCONTROL}:
+            if is_down:
+                self._ctrl_keys_down.add(key)
+            elif is_up:
+                self._ctrl_keys_down.discard(key)
+            return False
+        if key == VK_ADD:
+            if is_down and self._ctrl_keys_down:
+                if not self._combo_down:
+                    self._combo_down = True
+                    self._fire(self._on_press, "hotkey_press_callback_failed")
+                return True
+            if is_up and self._combo_down:
+                self._combo_down = False
+                self._fire(self._on_release, "hotkey_release_callback_failed")
+                return True
+            if is_up and self._swallow_talk_up:
+                # The hold was already cancelled; eat the key-up so no stray "+" lands.
+                self._swallow_talk_up = False
+                return True
+            if is_up and self._talk_down:
+                # Released after the mode was disarmed mid-hold — still ours to finish,
+                # otherwise the press would never be closed out.
+                self._talk_down = False
+                self._fire(self._on_talk_release, "talk_release_callback_failed")
+                return True
+            if is_down and self._talk_armed.is_set() and not self._ctrl_keys_down:
+                if not self._talk_down:
+                    self._talk_down = True
+                    self._fire(self._on_talk_press, "talk_press_callback_failed")
+                # Holding a key repeats the key-down; the guard above fires once.
+                return True
+            return False
+        if key == VK_ESCAPE and is_down:
+            if self._talk_down:
+                self._talk_down = False
+                self._swallow_talk_up = True
+                self._fire(self._on_talk_cancel, "talk_cancel_callback_failed")
+                return True
+            if self._combo_down:
+                self._fire(self._on_cancel, "hotkey_cancel_callback_failed")
+                return True
+            return False
+        if key == VK_F9:
+            if is_down and not self._f9_down:
+                self._f9_down = True
+                self._fire(self._on_hermes_toggle, "hermes_hotkey_callback_failed")
+                return True
+            if is_up:
+                self._f9_down = False
+                return True
+        return False
 
     def start(self) -> None:
         if self._thread is not None:
@@ -109,46 +199,8 @@ class NativeHoldHotkey:
             data = ctypes.cast(data_pointer, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
             is_down = message in {WM_KEYDOWN, WM_SYSKEYDOWN}
             is_up = message in {WM_KEYUP, WM_SYSKEYUP}
-            if data.vkCode in {VK_CONTROL, VK_LCONTROL, VK_RCONTROL}:
-                if is_down:
-                    self._ctrl_keys_down.add(data.vkCode)
-                elif is_up:
-                    self._ctrl_keys_down.discard(data.vkCode)
-            if data.vkCode == VK_ADD:
-                if is_down and self._ctrl_keys_down:
-                    if not self._combo_down:
-                        self._combo_down = True
-                        try:
-                            self._on_press()
-                        except Exception:
-                            logger.exception("hotkey_press_callback_failed")
-                    return 1
-                if is_up and self._combo_down:
-                    self._combo_down = False
-                    try:
-                        self._on_release()
-                    except Exception:
-                        logger.exception("hotkey_release_callback_failed")
-                    return 1
-            if data.vkCode == VK_ESCAPE and is_down and self._combo_down:
-                if self._on_cancel is not None:
-                    try:
-                        self._on_cancel()
-                    except Exception:
-                        logger.exception("hotkey_cancel_callback_failed")
+            if self._handle_key(data.vkCode, is_down, is_up):
                 return 1
-            if data.vkCode == VK_F9:
-                if is_down and not self._f9_down:
-                    self._f9_down = True
-                    if self._on_hermes_toggle is not None:
-                        try:
-                            self._on_hermes_toggle()
-                        except Exception:
-                            logger.exception("hermes_hotkey_callback_failed")
-                    return 1
-                if is_up:
-                    self._f9_down = False
-                    return 1
             return user32.CallNextHookEx(self._hook, code, message, data_pointer)
 
         self._callback_ref = callback

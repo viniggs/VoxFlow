@@ -14,6 +14,12 @@ Pressione `F9` para entrar no modo Hermes. Fale normalmente e aguarde o silênci
 encerrar cada turno. O painel mostra o que ela está pensando enquanto pensa, e a
 resposta conforme ela chega. Falar por cima interrompe.
 
+Para decidir você mesmo quando ela ouve, segure o `+` do teclado numérico enquanto
+fala e solte para enviar — inclusive por cima da fala dela, que é interrompida. A tecla
+só pertence à Friday enquanto ela está na tela; fora disso o `+` digita normalmente.
+Toques com menos de um segundo e gravações sem voz são descartados sem gastar um turno,
+e `Esc` durante a pressionada descarta o que foi gravado.
+
 O pensamento depende de um plugin instalado no Hermes
 (`~/.hermes/plugins/voxflow-reasoning/`), que escreve os deltas de raciocínio em
 `%LOCALAPPDATA%\VoxFlow\reasoning\stream.jsonl`. Sem ele o resto funciona igual.

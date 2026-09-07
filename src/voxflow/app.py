@@ -64,6 +64,9 @@ class ControllerSignals(QObject):
     metrics_changed = Signal(object)
     history_changed = Signal()
     hermes_toggle_requested = Signal()
+    talk_pressed = Signal()
+    talk_released = Signal()
+    talk_cancelled = Signal()
     hermes_state_changed = Signal(str, str)
     hermes_turn_started = Signal()
     hermes_heard = Signal(str)
@@ -94,6 +97,9 @@ class VoxFlowController(QObject):
         self._signals.preview_ready.connect(self._on_preview_ready, queued)
         self._signals.job_finished.connect(self._on_job_finished, queued)
         self._signals.hermes_toggle_requested.connect(self.toggle_hermes, queued)
+        self._signals.talk_pressed.connect(self._on_talk_pressed, queued)
+        self._signals.talk_released.connect(self._on_talk_released, queued)
+        self._signals.talk_cancelled.connect(self._on_talk_cancelled, queued)
         self._signals.hermes_audio_ready.connect(self._on_hermes_audio_ready, queued)
         self._signals.hermes_response_ready.connect(self._on_hermes_response_ready, queued)
         self._signals.hermes_stream_delta.connect(self._on_hermes_stream_delta, queued)
@@ -110,6 +116,9 @@ class VoxFlowController(QObject):
             self._signals.hotkey_released.emit,
             self._signals.cancel_requested.emit,
             self._signals.hermes_toggle_requested.emit,
+            self._signals.talk_pressed.emit,
+            self._signals.talk_released.emit,
+            self._signals.talk_cancelled.emit,
         )
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="voxflow-worker")
         self._hermes_executor = ThreadPoolExecutor(
@@ -131,6 +140,8 @@ class VoxFlowController(QObject):
         self._pending_config: AppConfig | None = None
         self._hermes_state = HermesState.OFF
         self._hermes_generation = 0
+        self._talk_active = False
+        self._talk_started_at = 0.0
         self._hermes_cancel = threading.Event()
         self._hermes_client = self._create_hermes_client(config)
         self._sentence_buffer = SentenceBuffer()
@@ -208,7 +219,7 @@ class VoxFlowController(QObject):
         self._audio.open()
         self._hotkey.start()
         self._executor.submit(self._stt.warmup)
-        logger.info("voxflow_ready phase=4.5 hotkeys=ctrl+num_add,f9")
+        logger.info("voxflow_ready phase=4.5 hotkeys=ctrl+num_add,f9,num_add")
         self._signals.status_changed.emit("Pronto — segure Ctrl + Numpad + para ditar")
 
     def stop(self) -> None:
@@ -516,12 +527,13 @@ class VoxFlowController(QObject):
             if self._hermes_state is not HermesState.STARTING:
                 return
             if ok:
-                self._enter_hermes_listening("fale normalmente; F9 encerra")
+                self._enter_hermes_listening("fale ou segure + do teclado numérico; F9 encerra")
             else:
                 self._set_hermes_state(HermesState.OFF, message)
 
     def _set_hermes_state(self, state: HermesState, message: str = "") -> None:
         self._hermes_state = state
+        self._hotkey.set_talk_armed(state not in {HermesState.OFF, HermesState.STARTING})
         self._signals.hermes_state_changed.emit(state.value, message)
         self._signals.status_changed.emit(f"Hermes: {message or state.value}")
 
@@ -546,6 +558,7 @@ class VoxFlowController(QObject):
 
     def _stop_hermes_mode(self) -> None:
         self._hermes_generation += 1
+        self._talk_active = False
         self._abandon_hermes_turn()
         self._speaker.interrupt()
         self._hermes_timer.stop()
@@ -557,6 +570,10 @@ class VoxFlowController(QObject):
 
     @Slot()
     def _hermes_tick(self) -> None:
+        if self._talk_active:
+            # The key decides when the turn ends. Letting the endpoint detector run
+            # here would cut the speaker off at the first pause for thought.
+            return
         rms = self._audio.current_rms()
         if self._hermes_state is HermesState.LISTENING:
             event = self._vad.feed_level(rms, 50)
@@ -581,11 +598,69 @@ class VoxFlowController(QObject):
                     "interrupção detectada; continue falando",
                 )
 
+    @Slot()
+    def _on_talk_pressed(self) -> None:
+        """Numpad + went down: Friday listens, whatever she was doing."""
+
+        if self._hermes_state in {HermesState.OFF, HermesState.STARTING} or self._talk_active:
+            return
+        if self._hermes_state is not HermesState.LISTENING:
+            # Pressing the key mid-answer is an interruption, and reads exactly like
+            # the barge-in the voice detector performs when it hears you talk over her.
+            logger.info("push_to_talk_interrupt state={}", self._hermes_state)
+            self._hermes_generation += 1
+            self._abandon_hermes_turn()
+            self._speaker.interrupt()
+        self._talk_active = True
+        self._talk_started_at = time.perf_counter()
+        self._vad.reset()
+        self._barge_vad.reset()
+        if not self._audio.is_recording:
+            self._audio.start_recording()
+        self._signals.hermes_turn_started.emit()
+        self._set_hermes_state(HermesState.LISTENING, "gravando — solte para enviar")
+        play_cue("start", enabled=self._config.general.sounds)
+
+    @Slot()
+    def _on_talk_released(self) -> None:
+        if not self._talk_active:
+            return
+        self._talk_active = False
+        # Measured from the key, not from the clip: the voice detector may have opened
+        # the recording earlier, and the rule the user set is about the hold.
+        held_ms = (time.perf_counter() - self._talk_started_at) * 1000
+        clip = self._audio.stop_recording()
+        if held_ms < self._config.hotkeys.hermes_push_to_talk_ms:
+            logger.info("push_to_talk_discarded reason=too_short held_ms={:.0f}", held_ms)
+            self._enter_hermes_listening("toque curto ignorado")
+            return
+        if clip is None or clip.rms < self._config.audio.minimum_rms:
+            rms = clip.rms if clip is not None else 0.0
+            logger.info("push_to_talk_discarded reason=low_rms rms={:.6f}", rms)
+            play_cue("cancel", enabled=self._config.general.sounds)
+            self._enter_hermes_listening("não ouvi fala; nada foi enviado")
+            return
+        logger.info("push_to_talk_sent held_ms={:.0f} audio_ms={:.0f}", held_ms, clip.audio_ms)
+        self._dispatch_hermes_clip(clip)
+
+    @Slot()
+    def _on_talk_cancelled(self) -> None:
+        if not self._talk_active:
+            return
+        self._talk_active = False
+        self._audio.stop_recording()
+        logger.info("push_to_talk_cancelled")
+        play_cue("cancel", enabled=self._config.general.sounds)
+        self._enter_hermes_listening("gravação descartada")
+
     def _finish_hermes_utterance(self) -> None:
         clip = self._audio.stop_recording()
         if clip is None or clip.rms < self._config.audio.minimum_rms:
             self._enter_hermes_listening("não ouvi fala; tente novamente")
             return
+        self._dispatch_hermes_clip(clip)
+
+    def _dispatch_hermes_clip(self, clip: AudioClip) -> None:
         self._set_hermes_state(HermesState.TRANSCRIBING, "convertendo sua fala")
         generation = self._hermes_generation
         future = self._executor.submit(
@@ -667,13 +742,15 @@ class VoxFlowController(QObject):
 
     @Slot()
     def _on_tts_started(self) -> None:
-        if self._hermes_state is not HermesState.OFF:
+        # A held key owns the state. Interrupting her still lets a sentence already
+        # handed to the player report itself, and it must not paint over the recording.
+        if self._hermes_state is not HermesState.OFF and not self._talk_active:
             self._barge_vad.reset()
             self._set_hermes_state(HermesState.SPEAKING, "fale para interromper")
 
     @Slot()
     def _on_tts_idle(self) -> None:
-        if self._hermes_state is not HermesState.OFF:
+        if self._hermes_state is not HermesState.OFF and not self._talk_active:
             self._enter_hermes_listening("pronto para a próxima pergunta")
 
     @Slot(str)

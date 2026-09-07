@@ -108,3 +108,35 @@ também pode ser aberto isoladamente com `scripts/preview_friday.py --studio`. A
 alterar o editor. O modelo está em `src/voxflow/orb_settings.py` e o editor em
 `src/voxflow/ui/orb_studio.py`. O próximo agente deve preservar seleção por estado,
 `Todos juntos`, color pickers ao vivo, salvar/resetar e os controles de erupção e voz.
+
+## Entrada de voz em 0.7.3 — dois modos convivendo
+
+A Friday tem duas formas de ouvir, e elas coexistem de propósito:
+
+1. **Mãos-livres** — a detecção de voz abre a gravação sozinha e o silêncio encerra o
+   turno. É o comportamento original.
+2. **Push-to-talk** — segurar o `+` do teclado numérico. Enquanto a tecla está
+   pressionada, `_hermes_tick` retorna cedo e o endpointing não encerra nada: quem
+   decide o fim do turno é a tecla.
+
+Se for mexer nisso, três armadilhas já pagas:
+
+- **A tecla não pode ser tomada para a sessão inteira.** Ela só é da Friday enquanto
+  ela está na tela (`NativeHoldHotkey.set_talk_armed`, dirigido por
+  `_set_hermes_state`). Fora disso o `+` tem que digitar.
+- **O key-up sempre precisa ser tratado**, mesmo se o modo foi desligado no meio da
+  pressionada — senão a gravação fica aberta sem quem a feche.
+- **Os callbacks da TTS podem chegar atrasados.** `_on_tts_started` e `_on_tts_idle`
+  ignoram o período da tecla pressionada, porque uma frase já entregue ao player ainda
+  reporta o fim depois de a Friday ter sido interrompida e sobrescreveria o estado.
+
+As regras de posse da tecla vivem em `NativeHoldHotkey._handle_key`, separada do
+callback do hook para poder ser testada sem um hook real (`tests/test_push_to_talk.py`).
+
+## Tamanho da resposta
+
+`hermes.instructions` teve um teto de "cerca de 120 palavras" da Fase 4 até 0.7.2. Foi
+removido em 0.7.3: cortava explicações justamente quando o usuário pedia profundidade.
+Se alguém reclamar de resposta curta demais ou longa demais, é esse texto que manda —
+e ele também fica persistido no `config.yaml` do usuário, então mudar só o padrão do
+código não alcança quem já tem o arquivo salvo.

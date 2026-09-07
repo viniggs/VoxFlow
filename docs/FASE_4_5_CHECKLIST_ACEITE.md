@@ -147,3 +147,48 @@ Data: 2026-09-07
   a prévia e os controles.
 - [ ] Confirmar que a aba Áudio mantém os controles de sensibilidade, início da fala,
   silêncio de encerramento e pré-roll.
+
+---
+
+# VoxFlow 0.7.3 — Push-to-talk da Friday
+
+Data: 2026-09-07
+
+## A tecla fora da conversa
+
+- [ ] Com a Friday **desligada**, abrir o Bloco de Notas e apertar o `+` do teclado
+  numérico. Confirmar que ele digita `+` normalmente.
+- [ ] Confirmar que `Ctrl + Numpad +` continua ditando como sempre.
+
+## A tecla durante a conversa
+
+- [ ] Apertar `F9`. Ir ao Bloco de Notas e apertar o `+` do numpad: confirmar que
+  **nada é digitado** (a tecla agora é da Friday).
+- [ ] Segurar o `+`, falar uma frase e soltar. Confirmar que o balão do usuário aparece
+  com o que foi falado e que a Friday responde.
+- [ ] Segurar o `+` e falar com **pausas longas para pensar** no meio. Confirmar que o
+  turno só é enviado quando a tecla é solta, e não na primeira pausa.
+
+## As duas regras
+
+- [ ] Dar um toque rápido no `+` (menos de 1 s) falando. Confirmar que nada é enviado e
+  que o estado volta a ouvir com "toque curto ignorado".
+- [ ] Segurar o `+` por uns 4 s **em silêncio** e soltar. Confirmar que nada é enviado e
+  que aparece "não ouvi fala; nada foi enviado".
+
+## Interrupção e cancelamento
+
+- [ ] Enquanto a Friday **fala**, segurar o `+` e falar por cima. Confirmar que ela para
+  na hora, que a gravação corre enquanto a tecla está pressionada e que soltar envia o
+  turno novo.
+- [ ] Segurar o `+`, falar, e apertar `Esc` sem soltar. Confirmar que a gravação é
+  descartada e que nenhum `+` aparece na janela ativa ao soltar a tecla.
+- [ ] Segurar o `+` e apertar `F9` (encerrar Hermes) antes de soltar. Confirmar que o
+  app volta ao ditado sem microfone preso e sem travar.
+
+## Resposta sem teto
+
+- [ ] Pedir uma explicação com profundidade ("me explica isso com calma, com exemplo").
+  Confirmar que a resposta **não é mais cortada em ~120 palavras**.
+- [ ] Fazer uma pergunta curta de sim/não e confirmar que ela continua respondendo
+  curto — o tamanho deve seguir a pergunta, não um teto fixo.

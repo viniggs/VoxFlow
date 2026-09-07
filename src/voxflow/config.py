@@ -29,6 +29,11 @@ class HotkeysConfig(StrictModel):
     dictation_lock: str = "double_tap"
     hermes_toggle: str = "f9"
     cancel: str = "esc"
+    #: Hold to talk to Friday. Only claimed while she is on screen, so the key keeps
+    #: typing "+" everywhere else.
+    hermes_push_to_talk: str = "num_add"
+    #: A tap shorter than this is a slip, not a turn, and is thrown away unheard.
+    hermes_push_to_talk_ms: int = Field(default=1000, ge=200, le=5000)
 
 
 class AudioConfig(StrictModel):
@@ -104,10 +109,14 @@ class HermesConfig(StrictModel):
     #: ``/v1/responses``. Kept switchable so the old path is one setting away.
     use_runs_api: bool = True
     attach_screenshot_on_command: bool = True
+    #: Written for a tutor who is heard, not read. The length is left to the question:
+    #: a fixed word cap made her cut explanations short exactly when depth was asked for.
     instructions: str = (
         "Você é Hermes, um tutor por voz socrático. Responda em português brasileiro, "
-        "com clareza e naturalidade. Faça no máximo uma pergunta por vez, prefira respostas "
-        "curtas que soem bem faladas e limite-se a cerca de 120 palavras. Não use Markdown "
+        "com clareza e naturalidade. Faça no máximo uma pergunta por vez. Ajuste o tamanho "
+        "da resposta ao que foi pedido: seja breve numa troca rápida e desenvolva à vontade "
+        "quando eu pedir explicação, exemplo, comparação ou aprofundamento — sem limite de "
+        "palavras. Escreva em frases que soem bem faladas em voz alta. Não use Markdown "
         "complexo, tabelas ou blocos de código salvo quando indispensável."
     )
     tts: TTSConfig = Field(default_factory=TTSConfig)

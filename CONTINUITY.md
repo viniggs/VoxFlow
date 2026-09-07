@@ -521,3 +521,59 @@ aprovado, shaders OpenGL 3.3 renderizados e imagem customizada diferente da imag
 base confirmada. A prévia interativa do estúdio foi deixada aberta para observação.
 Ainda falta apenas o aceite visual do usuário e, se ele pedir, a geração de um novo
 instalador; nenhuma entrega instalada foi alterada.
+
+## 0.7.3 — Push-to-talk da Friday e resposta sem teto (2026-09-07)
+
+### Push-to-talk
+
+Segurar o `+` do teclado numérico grava e, ao soltar, envia para a Friday. Convive com
+a detecção de voz existente: o modo mãos-livres continua funcionando, e a tecla é um
+atalho por cima dele para quando o ambiente tem ruído ou a pausa para pensar seria
+cortada pelo endpointing.
+
+Três regras definem o comportamento, todas pedidas pelo usuário:
+
+- **A tecla só é da Friday enquanto ela está na tela.** Fora de uma conversa o `+`
+  digita normalmente. `NativeHoldHotkey.set_talk_armed()` liga e desliga essa posse, e
+  `_set_hermes_state` a mantém sincronizada com o estado do Hermes.
+- **Toque menor que 1 s é descartado.** Medido pela tecla, não pelo clipe: a detecção
+  de voz pode ter aberto a gravação antes da tecla descer. Ajustável em
+  `hotkeys.hermes_push_to_talk_ms` (padrão 1000, faixa 200–5000).
+- **Sem voz, nada é enviado.** Mesmo teste de RMS do ditado
+  (`audio.minimum_rms`), com a Friday voltando a ouvir sem gastar um turno.
+
+Detalhes que exigiram cuidado:
+
+- Enquanto a tecla está pressionada, `_hermes_tick` retorna cedo. Sem isso o
+  endpointing encerraria o turno na primeira pausa para pensar.
+- `_on_tts_started` e `_on_tts_idle` também ignoram o período da tecla pressionada.
+  Apertar `+` durante a fala interrompe a Friday, mas uma frase já entregue ao player
+  ainda reporta o fim e sobrescreveria o estado da gravação em andamento.
+- Apertar `+` fora de `LISTENING` é uma interrupção: cancela o turno em voo pelo mesmo
+  caminho do barge-in (`_abandon_hermes_turn` + `speaker.interrupt`).
+- `Esc` durante a pressionada descarta a gravação e engole o key-up seguinte, para não
+  deixar um `+` solto na janela ativa.
+- Se o modo Hermes for desligado com a tecla ainda pressionada, o key-up continua sendo
+  tratado; caso contrário a gravação ficaria aberta sem quem a fechasse.
+
+As regras de posse da tecla ficam em `NativeHoldHotkey._handle_key`, separada do
+callback do hook justamente para poder ser testada sem um hook real do Windows.
+
+### Resposta sem teto de palavras
+
+`hermes.instructions` dizia "prefira respostas curtas ... e limite-se a cerca de 120
+palavras". Foi escrito na Fase 4, quando a Friday só respondia falando. Depois que ela
+passou a escrever arquivos de estudo, o teto passou a cortar explicações justamente
+quando profundidade era o que se pedia. O texto novo mantém a resposta adequada à voz
+e deixa o tamanho por conta da pergunta.
+
+O `config.yaml` ativo do usuário também foi atualizado (backup em
+`config.yaml.bak.pre-ptt`), porque o valor antigo já estava persistido lá e o novo
+padrão sozinho não o alcançaria.
+
+### Arquivos alterados
+
+`src/voxflow/hotkeys.py`, `src/voxflow/app.py`, `src/voxflow/config.py`,
+`tests/test_push_to_talk.py` (novo), `tests/test_push_to_talk_rules.py` (novo).
+
+Validação: Ruff aprovado, 83 testes aprovados.
