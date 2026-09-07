@@ -42,6 +42,14 @@ if (-not $SkipValidation) {
 }
 Invoke-Checked { uv run pyinstaller --clean --noconfirm (Join-Path $ProjectRoot 'packaging\voxflow.spec') } 'O PyInstaller falhou.'
 
+$ForbiddenQtDlls = @('icuuc.dll', 'icudt78.dll')
+foreach ($DllName in $ForbiddenQtDlls) {
+    $BundledDll = Join-Path $ProjectRoot "dist\VoxFlow\_internal\$DllName"
+    if (Test-Path -LiteralPath $BundledDll) {
+        throw "DLL incompatível com Qt incluída no pacote: $BundledDll"
+    }
+}
+
 New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
 New-Item -ItemType Directory -Path $StagingDir -Force | Out-Null
 

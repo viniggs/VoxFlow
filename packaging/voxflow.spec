@@ -15,6 +15,16 @@ analysis = Analysis(
     noarchive=False,
     optimize=0,
 )
+
+# Qt 6 on Windows imports the system ICU compatibility library (icuuc.dll).
+# The Codex build environment also exposes Poppler's incompatible ICU 78 on PATH;
+# bundling it makes QtCore fail at startup with "procedure could not be found".
+incompatible_icu_names = {"icuuc.dll", "icudt78.dll"}
+analysis.binaries = [
+    binary
+    for binary in analysis.binaries
+    if Path(binary[0]).name.casefold() not in incompatible_icu_names
+]
 pyz = PYZ(analysis.pure)
 exe = EXE(
     pyz,

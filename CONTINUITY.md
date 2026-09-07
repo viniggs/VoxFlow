@@ -63,6 +63,8 @@ explicitamente dispensado pelo usuário e permanece não testado.
 - STT e injeção executados em worker; loop Qt permanece livre.
 - Instância única e comando/atalho `--quit` para encerramento controlado.
 - Logs de `stt_ms`, `inject_ms` e `total_after_release_ms` sem registrar o conteúdo ditado.
+- Empacotamento exclui o ICU 78 do Poppler exposto pelo ambiente Codex; o Qt usa a
+  biblioteca compatível do Windows. O script de release falha se essas DLLs voltarem ao pacote.
 
 ## Próxima fase — somente após OK do usuário
 
