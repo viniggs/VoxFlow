@@ -1,8 +1,9 @@
 param(
     [ValidatePattern('^\d+\.\d+\.\d+$')]
     [string]$Version = '0.1.0',
-    [ValidateRange(0, 7)]
-    [int]$Phase = 0,
+    # Phases can be fractional: 4.5 was an interface pass between 4 and 5.
+    [ValidatePattern('^\d+(\.\d+)?$')]
+    [string]$Phase = '0',
     [switch]$SkipValidation
 )
 
