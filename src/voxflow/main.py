@@ -54,6 +54,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     from voxflow.app import VoxFlowController
     from voxflow.single_instance import InstanceGuard
     from voxflow.storage import HistoryStore
+    from voxflow.ui.hermes_panel import HermesPanel
     from voxflow.ui.history import HistoryWindow
     from voxflow.ui.overlay import DictationOverlay
     from voxflow.ui.settings import SettingsWindow
@@ -87,6 +88,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     overlay = DictationOverlay()
     history_window = HistoryWindow(history_store)
     settings_window = SettingsWindow(config, paths)
+    hermes_panel = HermesPanel()
     tray = TrayController(application, window, config.audio.input_device)
     controller.signals.dictation_started.connect(window.begin_dictation)
     controller.signals.dictation_started.connect(overlay.begin)
@@ -105,10 +107,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     controller.signals.history_changed.connect(history_window.refresh)
     settings_window.saved.connect(controller.apply_config)
     settings_window.history_requested.connect(history_window.show_and_refresh)
+    settings_window.hermes_action_requested.connect(controller.request_hermes_action)
+    controller.signals.hermes_gateway_status.connect(settings_window.set_hermes_status)
+    controller.signals.hermes_state_changed.connect(hermes_panel.set_state)
+    controller.signals.hermes_turn_started.connect(hermes_panel.begin_turn)
+    controller.signals.hermes_heard.connect(hermes_panel.set_heard)
+    controller.signals.hermes_delta.connect(hermes_panel.append_response)
+    controller.signals.hermes_mode_changed.connect(tray.set_mode)
+    controller.signals.hermes_mode_changed.connect(
+        lambda mode: hermes_panel.show() if mode == "hermes" else hermes_panel.hide()
+    )
+    hermes_panel.toggle_requested.connect(controller.toggle_hermes)
     tray.settings_requested.connect(settings_window.show_tab)
     tray.history_requested.connect(history_window.show_and_refresh)
     tray.microphone_selected.connect(settings_window.set_microphone)
     tray.autostart_changed.connect(settings_window.set_autostart_enabled)
+    tray.mode_requested.connect(controller.request_mode)
     overlay.cancel_requested.connect(controller.cancel_dictation)
     tray.quit_requested.connect(application.quit)
     window.show()

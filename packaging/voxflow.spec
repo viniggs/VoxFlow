@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_submodules
+
 project_root = Path(SPECPATH).parent
 
 analysis = Analysis(
@@ -7,7 +9,7 @@ analysis = Analysis(
     pathex=[str(project_root / "src")],
     binaries=[],
     datas=[],
-    hiddenimports=["keyring.backends.Windows"],
+    hiddenimports=["keyring.backends.Windows", *collect_submodules("edge_tts")],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -127,12 +127,21 @@ class AudioCapture:
 
     def current_rms(self) -> float:
         with self._lock:
-            if not self._recorded:
+            frames = self._recorded[-5:] if self._recording else list(self._preroll)[-5:]
+            if not frames:
                 return 0.0
-            recent = self._recorded[-5:]
-            audio = np.concatenate(recent).astype(np.int16, copy=False)
+            audio = np.concatenate(frames).astype(np.int16, copy=False)
         normalized = audio.astype(np.float32) / 32768.0
         return float(np.sqrt(np.mean(np.square(normalized)))) if normalized.size else 0.0
+
+    @property
+    def is_recording(self) -> bool:
+        with self._lock:
+            return self._recording
+
+    def clear_preroll(self) -> None:
+        with self._lock:
+            self._preroll.clear()
 
     def _build_clip(
         self,

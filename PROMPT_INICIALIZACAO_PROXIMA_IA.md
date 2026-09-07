@@ -36,10 +36,12 @@ aqui significa apenas o preview na UI: nunca injete parciais no Notepad, Chrome 
 aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa visibilidade em
 todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco horas é crítico.
 
-A versão 0.4.1 corrige o `WinError 87` do `SendInput` x64 e o `WinError 448` do modelo simbólico.
-Ela precisa de aceite manual no Bloco de Notas/Chrome antes da Fase 4. Em teste real, Muse deu
-timeout e DeepSeek V4 Flash respondeu corretamente; a UI agora torna essa rota explícita.
+A versão atual é 0.5.0/Fase 4. Ela acrescenta modo Hermes hands-free em `F9`, VAD,
+`/v1/responses` com SSE, painel de resposta, Edge TTS por sentença, barge-in, half-duplex e
+controles de health/start/stop. A API local do Hermes já foi habilitada em `127.0.0.1:8642`;
+a chave está no `.env` do Hermes e no Windows Credential Manager, nunca em arquivos do repo.
 
-Ao assumir, confirme primeiro se a entrega 0.4.1/Fase 3 descrita no `CONTINUITY.md` foi instalada
-e aceita. Se houver erro, leia o painel e `%LOCALAPPDATA%\VoxFlow\logs\voxflow.log`, corrija
-apenas a causa concreta e regenere a entrega. Não avance para a Fase 4 sem OK.
+Ao assumir, confirme primeiro se a entrega 0.5.0/Fase 4 descrita no `CONTINUITY.md` foi instalada
+e aceita usando `docs\FASE_4_CHECKLIST_ACEITE.md`. Se houver erro, leia o painel e
+`%LOCALAPPDATA%\VoxFlow\logs\voxflow.log`, corrija apenas a causa concreta e regenere a entrega.
+Não avance para a Fase 5 sem OK.

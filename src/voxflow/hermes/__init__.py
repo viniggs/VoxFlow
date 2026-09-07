@@ -1,2 +1,2 @@
-"""Hermes integration namespace."""
+"""Hermes conversation integration."""
 

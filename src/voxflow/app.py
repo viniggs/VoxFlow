@@ -1,8 +1,9 @@
-"""Phase 3 orchestrator and dictation state machine."""
+"""Dictation and hands-free Hermes state machines."""
 
 from __future__ import annotations
 
 import enum
+import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
@@ -12,7 +13,11 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
 
 from voxflow.audio.capture import AudioCapture, AudioClip
 from voxflow.audio.cues import play_cue
+from voxflow.audio.vad import EndpointDetector, VADEvent
 from voxflow.config import AppConfig
+from voxflow.hermes.client import HermesClient
+from voxflow.hermes.gateway import start_gateway, stop_gateway
+from voxflow.hermes.tts import EdgeSentenceSpeaker, SentenceBuffer
 from voxflow.hotkeys import NativeHoldHotkey
 from voxflow.secrets import SecretStore
 from voxflow.storage import HistoryStore
@@ -29,6 +34,15 @@ class DictationState(enum.StrEnum):
     TRANSCRIBING = "transcribing"
     CLEANING = "cleaning"
     INJECTING = "injecting"
+
+
+class HermesState(enum.StrEnum):
+    OFF = "off"
+    STARTING = "starting"
+    LISTENING = "listening"
+    TRANSCRIBING = "transcribing"
+    THINKING = "thinking"
+    SPEAKING = "speaking"
 
 
 class ControllerSignals(QObject):
@@ -48,6 +62,20 @@ class ControllerSignals(QObject):
     error_changed = Signal(str)
     metrics_changed = Signal(object)
     history_changed = Signal()
+    hermes_toggle_requested = Signal()
+    hermes_state_changed = Signal(str, str)
+    hermes_turn_started = Signal()
+    hermes_heard = Signal(str)
+    hermes_delta = Signal(str)
+    hermes_mode_changed = Signal(str)
+    hermes_gateway_status = Signal(str)
+    hermes_audio_ready = Signal(int, object)
+    hermes_response_ready = Signal(int, object)
+    hermes_stream_delta = Signal(int, str)
+    tts_started = Signal()
+    tts_idle = Signal()
+    tts_error = Signal(str)
+    gateway_result = Signal(str, object)
 
 
 class VoxFlowController(QObject):
@@ -63,6 +91,14 @@ class VoxFlowController(QObject):
         self._signals.cancel_requested.connect(self.cancel_dictation, queued)
         self._signals.preview_ready.connect(self._on_preview_ready, queued)
         self._signals.job_finished.connect(self._on_job_finished, queued)
+        self._signals.hermes_toggle_requested.connect(self.toggle_hermes, queued)
+        self._signals.hermes_audio_ready.connect(self._on_hermes_audio_ready, queued)
+        self._signals.hermes_response_ready.connect(self._on_hermes_response_ready, queued)
+        self._signals.hermes_stream_delta.connect(self._on_hermes_stream_delta, queued)
+        self._signals.tts_started.connect(self._on_tts_started, queued)
+        self._signals.tts_idle.connect(self._on_tts_idle, queued)
+        self._signals.tts_error.connect(self._on_tts_error, queued)
+        self._signals.gateway_result.connect(self._on_gateway_result, queued)
         self._audio = self._create_audio(config)
         self._stt = self._create_stt(config)
         self._injector = ClipboardInjector(restore_clipboard=config.inject.restore_clipboard)
@@ -71,8 +107,13 @@ class VoxFlowController(QObject):
             self._signals.hotkey_pressed.emit,
             self._signals.hotkey_released.emit,
             self._signals.cancel_requested.emit,
+            self._signals.hermes_toggle_requested.emit,
         )
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="voxflow-worker")
+        self._hermes_executor = ThreadPoolExecutor(
+            max_workers=2,
+            thread_name_prefix="voxflow-hermes",
+        )
         self._preview_timer = QTimer(self)
         self._preview_timer.setInterval(120)
         self._preview_timer.timeout.connect(self._preview_tick)
@@ -81,6 +122,17 @@ class VoxFlowController(QObject):
         self._recording_generation = 0
         self._active_app = ActiveApp()
         self._pending_config: AppConfig | None = None
+        self._hermes_state = HermesState.OFF
+        self._hermes_generation = 0
+        self._hermes_cancel = threading.Event()
+        self._hermes_client = self._create_hermes_client(config)
+        self._sentence_buffer = SentenceBuffer()
+        self._speaker = self._create_speaker(config)
+        self._vad = self._create_vad(config)
+        self._barge_vad = self._create_vad(config)
+        self._hermes_timer = QTimer(self)
+        self._hermes_timer.setInterval(50)
+        self._hermes_timer.timeout.connect(self._hermes_tick)
 
     @staticmethod
     def _create_audio(config: AppConfig) -> AudioCapture:
@@ -100,6 +152,30 @@ class VoxFlowController(QObject):
             cuda_dll_dirs=config.stt.cuda_dll_dirs,
         )
 
+    @staticmethod
+    def _create_vad(config: AppConfig) -> EndpointDetector:
+        return EndpointDetector(
+            sensitivity=config.audio.vad_threshold,
+            endpoint_silence_ms=config.audio.endpoint_silence_ms,
+        )
+
+    @staticmethod
+    def _create_hermes_client(config: AppConfig) -> HermesClient:
+        return HermesClient(
+            config.hermes.base_url,
+            SecretStore().get("hermes") or "",
+            config.hermes.session_key,
+        )
+
+    def _create_speaker(self, config: AppConfig) -> EdgeSentenceSpeaker:
+        return EdgeSentenceSpeaker(
+            config.hermes.tts.voice,
+            config.hermes.tts.rate,
+            self._signals.tts_started.emit,
+            self._signals.tts_idle.emit,
+            self._signals.tts_error.emit,
+        )
+
     @property
     def state(self) -> DictationState:
         return self._state
@@ -112,14 +188,18 @@ class VoxFlowController(QObject):
         self._audio.open()
         self._hotkey.start()
         self._executor.submit(self._stt.warmup)
-        logger.info("voxflow_ready phase=3 hotkey=ctrl+num_add")
+        logger.info("voxflow_ready phase=4 hotkeys=ctrl+num_add,f9")
         self._signals.status_changed.emit("Pronto — segure Ctrl + Numpad + para ditar")
 
     def stop(self) -> None:
         self._preview_timer.stop()
+        self._hermes_timer.stop()
+        self._hermes_cancel.set()
+        self._speaker.close()
         self._hotkey.stop()
         self._audio.close()
         self._executor.shutdown(wait=True, cancel_futures=True)
+        self._hermes_executor.shutdown(wait=False, cancel_futures=True)
         self._cleaner.close()
         logger.info("voxflow_stopped")
 
@@ -145,6 +225,13 @@ class VoxFlowController(QObject):
             self._injector = ClipboardInjector(
                 restore_clipboard=config.inject.restore_clipboard
             )
+        if old_config.hermes != config.hermes:
+            self._speaker.close()
+            self._speaker = self._create_speaker(config)
+        self._hermes_client = self._create_hermes_client(config)
+        if old_config.audio != config.audio:
+            self._vad = self._create_vad(config)
+            self._barge_vad = self._create_vad(config)
         self._signals.status_changed.emit("Configuração salva com sucesso")
 
     @Slot()
@@ -162,6 +249,9 @@ class VoxFlowController(QObject):
 
     @Slot()
     def _on_hotkey_pressed(self) -> None:
+        if self._hermes_state is not HermesState.OFF:
+            logger.info("dictation_ignored reason=hermes_active")
+            return
         if self._state is not DictationState.IDLE:
             logger.warning("dictation_ignored state={}", self._state)
             return
@@ -346,3 +436,205 @@ class VoxFlowController(QObject):
             play_cue("done", enabled=self._config.general.sounds)
         self._state = DictationState.IDLE
         self._apply_pending_config()
+
+    @Slot()
+    def toggle_hermes(self) -> None:
+        if self._hermes_state is not HermesState.OFF:
+            self._stop_hermes_mode()
+            return
+        if self._state is not DictationState.IDLE:
+            self._signals.status_changed.emit("Finalize o ditado antes de iniciar o Hermes")
+            return
+        self._set_hermes_state(HermesState.STARTING, "iniciando o serviço local")
+        self._signals.hermes_mode_changed.emit("hermes")
+        future = self._hermes_executor.submit(start_gateway, self._config.hermes.base_url)
+        future.add_done_callback(lambda done: self._complete_gateway("start_mode", done))
+
+    @Slot(str)
+    def request_mode(self, mode: str) -> None:
+        if mode == "hermes" and self._hermes_state is HermesState.OFF:
+            self.toggle_hermes()
+        elif mode == "dictation" and self._hermes_state is not HermesState.OFF:
+            self._stop_hermes_mode()
+
+    @Slot(str)
+    def request_hermes_action(self, action: str) -> None:
+        if action == "health":
+            future = self._hermes_executor.submit(self._hermes_client.health)
+        elif action == "start":
+            future = self._hermes_executor.submit(start_gateway, self._config.hermes.base_url)
+        elif action == "stop":
+            self._stop_hermes_mode()
+            future = self._hermes_executor.submit(stop_gateway)
+        else:
+            return
+        future.add_done_callback(lambda done, current=action: self._complete_gateway(current, done))
+
+    def _complete_gateway(self, action: str, future: Future[tuple[bool, str]]) -> None:
+        try:
+            result: object = future.result()
+        except Exception as exc:
+            result = exc
+        self._signals.gateway_result.emit(action, result)
+
+    @Slot(str, object)
+    def _on_gateway_result(self, action: str, result: object) -> None:
+        if isinstance(result, Exception):
+            ok, message = False, f"Falha no Hermes: {type(result).__name__}"
+        else:
+            ok, message = result  # type: ignore[misc]
+        self._signals.hermes_gateway_status.emit(message)
+        if action == "start_mode":
+            if ok:
+                self._enter_hermes_listening("fale normalmente; F9 encerra")
+            else:
+                self._set_hermes_state(HermesState.OFF, message)
+                self._signals.hermes_mode_changed.emit("dictation")
+
+    def _set_hermes_state(self, state: HermesState, message: str = "") -> None:
+        self._hermes_state = state
+        self._signals.hermes_state_changed.emit(state.value, message)
+        self._signals.status_changed.emit(f"Hermes: {message or state.value}")
+
+    def _enter_hermes_listening(self, message: str = "ouvindo") -> None:
+        self._vad.reset()
+        self._barge_vad.reset()
+        self._audio.clear_preroll()
+        self._set_hermes_state(HermesState.LISTENING, message)
+        self._hermes_timer.start()
+
+    def _stop_hermes_mode(self) -> None:
+        self._hermes_generation += 1
+        self._hermes_cancel.set()
+        self._speaker.interrupt()
+        self._hermes_timer.stop()
+        if self._audio.is_recording:
+            self._audio.stop_recording()
+        self._set_hermes_state(HermesState.OFF, "pressione F9 para iniciar")
+        self._signals.hermes_mode_changed.emit("dictation")
+
+    @Slot()
+    def _hermes_tick(self) -> None:
+        rms = self._audio.current_rms()
+        if self._hermes_state is HermesState.LISTENING:
+            event = self._vad.feed_level(rms, 50)
+            if event is VADEvent.SPEECH_STARTED and not self._audio.is_recording:
+                self._audio.start_recording()
+                self._signals.hermes_turn_started.emit()
+                self._set_hermes_state(HermesState.LISTENING, "fala detectada")
+            elif event is VADEvent.END_OF_SPEECH and self._audio.is_recording:
+                self._finish_hermes_utterance()
+        elif self._hermes_state is HermesState.SPEAKING and not self._config.hermes.half_duplex:
+            if self._barge_vad.feed_level(rms, 50) is VADEvent.SPEECH_STARTED:
+                logger.info("hermes_barge_in")
+                self._hermes_generation += 1
+                self._hermes_cancel.set()
+                self._speaker.interrupt()
+                self._vad.reset()
+                self._vad.feed_level(rms, 300)
+                self._audio.start_recording()
+                self._signals.hermes_turn_started.emit()
+                self._set_hermes_state(
+                    HermesState.LISTENING,
+                    "interrupção detectada; continue falando",
+                )
+
+    def _finish_hermes_utterance(self) -> None:
+        clip = self._audio.stop_recording()
+        if clip is None or clip.rms < self._config.audio.minimum_rms:
+            self._enter_hermes_listening("não ouvi fala; tente novamente")
+            return
+        self._set_hermes_state(HermesState.TRANSCRIBING, "convertendo sua fala")
+        generation = self._hermes_generation
+        future = self._executor.submit(
+            self._stt.transcribe,
+            clip.pcm16,
+            clip.sample_rate,
+            self._config.general.language,
+        )
+        future.add_done_callback(
+            lambda done, current=generation: self._complete_hermes_audio(current, done)
+        )
+
+    def _complete_hermes_audio(self, generation: int, future: Future[Transcript]) -> None:
+        try:
+            result: object = future.result()
+        except Exception as exc:
+            result = exc
+        self._signals.hermes_audio_ready.emit(generation, result)
+
+    @Slot(int, object)
+    def _on_hermes_audio_ready(self, generation: int, result: object) -> None:
+        if generation != self._hermes_generation or self._hermes_state is HermesState.OFF:
+            return
+        if isinstance(result, Exception):
+            self._hermes_failure(result)
+            return
+        transcript = result
+        if not isinstance(transcript, Transcript) or not transcript.text.strip():
+            self._enter_hermes_listening("não entendi; fale novamente")
+            return
+        self._signals.hermes_heard.emit(transcript.text)
+        self._set_hermes_state(HermesState.THINKING, "resposta chegando em tempo real")
+        self._hermes_cancel = threading.Event()
+        self._sentence_buffer = SentenceBuffer()
+        self._speaker.begin_response()
+        future = self._hermes_executor.submit(
+            self._hermes_client.stream_response,
+            transcript.text,
+            self._config.hermes.instructions,
+            lambda delta: self._signals.hermes_stream_delta.emit(generation, delta),
+            self._hermes_cancel,
+        )
+        future.add_done_callback(
+            lambda done, current=generation: self._complete_hermes_response(current, done)
+        )
+
+    @Slot(int, str)
+    def _on_hermes_stream_delta(self, generation: int, delta: str) -> None:
+        if generation != self._hermes_generation or self._hermes_state is HermesState.OFF:
+            return
+        self._signals.hermes_delta.emit(delta)
+        for sentence in self._sentence_buffer.add(delta):
+            self._speaker.enqueue(sentence)
+
+    def _complete_hermes_response(self, generation: int, future: Future[object]) -> None:
+        try:
+            result: object = future.result()
+        except Exception as exc:
+            result = exc
+        self._signals.hermes_response_ready.emit(generation, result)
+
+    @Slot(int, object)
+    def _on_hermes_response_ready(self, generation: int, result: object) -> None:
+        if generation != self._hermes_generation or self._hermes_state is HermesState.OFF:
+            return
+        if isinstance(result, Exception):
+            self._speaker.interrupt()
+            self._hermes_failure(result)
+            return
+        tail = self._sentence_buffer.flush()
+        if tail:
+            self._speaker.enqueue(tail)
+        self._speaker.end_response()
+
+    @Slot()
+    def _on_tts_started(self) -> None:
+        if self._hermes_state is not HermesState.OFF:
+            self._barge_vad.reset()
+            self._set_hermes_state(HermesState.SPEAKING, "fale para interromper")
+
+    @Slot()
+    def _on_tts_idle(self) -> None:
+        if self._hermes_state is not HermesState.OFF:
+            self._enter_hermes_listening("pronto para a próxima pergunta")
+
+    @Slot(str)
+    def _on_tts_error(self, message: str) -> None:
+        self._signals.hermes_gateway_status.emit(message)
+
+    def _hermes_failure(self, error: Exception) -> None:
+        logger.error("hermes_turn_failed error_type={} error={!s}", type(error).__name__, error)
+        message = f"{type(error).__name__}: {error}"
+        self._signals.error_changed.emit(message)
+        self._set_hermes_state(HermesState.LISTENING, "houve um erro; tente novamente")

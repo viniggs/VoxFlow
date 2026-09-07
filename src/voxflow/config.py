@@ -98,6 +98,12 @@ class HermesConfig(StrictModel):
     session_key: str = "voxflow:estudo"
     half_duplex: bool = False
     attach_screenshot_on_command: bool = True
+    instructions: str = (
+        "Você é Hermes, um tutor por voz socrático. Responda em português brasileiro, "
+        "com clareza e naturalidade. Faça no máximo uma pergunta por vez, prefira respostas "
+        "curtas que soem bem faladas e limite-se a cerca de 120 palavras. Não use Markdown "
+        "complexo, tabelas ou blocos de código salvo quando indispensável."
+    )
     tts: TTSConfig = Field(default_factory=TTSConfig)
 
 

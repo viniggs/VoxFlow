@@ -1,8 +1,8 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-07
-Versão: 0.4.1
-Fase concluída no código: Fase 3, aguardando aceite manual
+Versão: 0.5.0
+Fase concluída no código: Fase 4, aguardando aceite manual
 
 ## Objetivo
 
@@ -29,8 +29,9 @@ A implementação deve seguir, sem saltos, as fases da especificação em
 - Windows nativo; Hermes não roda no WSL2.
 - Python 3.12.10, uv 0.12.9, Git e FFmpeg disponíveis.
 - NVIDIA GeForce RTX 5070, 12 GB de VRAM.
-- Hermes 0.20.6 em `C:\Users\vinig\AppData\Local\hermes`.
-- Hermes estava parado e a API Server não estava configurada em 2026-09-06.
+- Hermes 0.21.0 em `C:\Users\vinig\AppData\Local\hermes`.
+- Hermes é nativo, não WSL2. A API local foi habilitada em `127.0.0.1:8642` e uma chave
+  forte foi gravada no `.env` do Hermes e no Windows Credential Manager, sem entrar no repo.
 - Chatterbox pt-BR em `C:\AI\Chatterbox-Friday`, repositório
   `ResembleAI/Chatterbox-Multilingual-pt-br`, incluindo `s3gen_v3.pt`.
 - Faster Whisper large-v3-turbo já está no cache Hugging Face em
@@ -160,16 +161,39 @@ ao log para garantir diagnóstico mesmo se um componente não registrar sua pró
 
 O prompt pronto para a próxima IA está em `PROMPT_INICIALIZACAO_PROXIMA_IA.md`.
 
+## Fase 4 implementada
+
+- `F9` alterna entre Ditado e Hermes; o menu do tray oferece os mesmos modos.
+- Máquina de estados `OFF → LISTENING → TRANSCRIBING → THINKING → SPEAKING → LISTENING`.
+- Endpointing local por energia: fala sustentada por 300 ms e fim após 700 ms de silêncio.
+- Cliente `httpx` para `/v1/responses`, estado por `conversation`, chave Bearer no keyring e
+  parsing incremental de `response.output_text.delta`/`response.completed`.
+- Painel sempre no topo mostra a fala reconhecida e a resposta do Hermes conforme os deltas SSE.
+- Edge TTS consome frases de aproximadamente 40 caracteres ou mais; playback Windows pode ser
+  interrompido imediatamente, descartando a fila no barge-in.
+- Half-duplex desativa a escuta durante a fala do Hermes para uso com caixas de som.
+- Configurações incluem URL, chave protegida, sessão, prompt do tutor, voz, velocidade,
+  half-duplex e botões de health/start/stop do gateway.
+- Rede, STT, gateway e TTS ficam fora da thread principal do Qt. Logs incluem
+  `ttfb_hermes_ms` e `tts_first_audio_ms`, sem conteúdo da conversa.
+- A voz padrão continua `pt-BR-AntonioNeural`; escolha/tuning da voz definitiva permanece para
+  o fim do projeto, conforme pedido do usuário.
+- O endpointing usa um detector RMS leve nesta fase. `silero-vad` segue disponível como extra,
+  mas não foi empacotado para evitar custo pesado sem evidência de necessidade na RTX 5070.
+- Validação automatizada final em 2026-09-07: Ruff aprovado e 26 testes aprovados.
+- O executável empacotado respondeu com código 0 ao diagnóstico `--check`.
+- Entrega: `releases\fase-4\VoxFlow-0.5.0-fase-4-setup.exe`, ZIP de código no mesmo
+  diretório e checklist em `docs\FASE_4_CHECKLIST_ACEITE.md`.
+
 ## Próxima fase — somente após OK do usuário
 
-Fase 4: cliente Hermes SSE, TTS por sentença, hands-free VAD, barge-in, half-duplex e painel
-de resposta. Não iniciar antes do aceite manual da versão 0.4.1/Fase 3.
+Fase 5: comandos de voz do modo estudo, screenshot para Hermes, log Markdown por sessão e
+resumo/revisão ao encerrar. Não iniciar antes do aceite manual da versão 0.5.0/Fase 4.
 
 ## Restrições
 
 - Nunca bloquear a thread principal do Qt.
 - Não armazenar credenciais em YAML, logs, ZIP ou repositório.
-- Não modificar a configuração do Hermes antes da Fase 4.
 - O fallback CPU da Fase 1 garante funcionamento, mas o empacotamento independente das DLLs CUDA continua previsto para a Fase 6.
 - Não implementar fases futuras antes do OK explícito.
 - Validar uma vez por entrega, proporcionalmente ao risco.

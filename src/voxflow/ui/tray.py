@@ -16,6 +16,7 @@ class TrayController(QObject):
     history_requested = Signal()
     microphone_selected = Signal(str)
     autostart_changed = Signal(bool)
+    mode_requested = Signal(str)
 
     def __init__(self, application: QApplication, status_window: object, microphone: str) -> None:
         super().__init__()
@@ -33,16 +34,22 @@ class TrayController(QObject):
         menu.addAction(open_action)
 
         mode_menu = menu.addMenu("Modo")
-        dictation_action = QAction("Ditado", mode_menu)
-        dictation_action.setCheckable(True)
-        dictation_action.setChecked(True)
-        hermes_action = QAction("Hermes — disponível na Fase 4", mode_menu)
-        hermes_action.setEnabled(False)
+        self._dictation_action = QAction("Ditado", mode_menu)
+        self._dictation_action.setCheckable(True)
+        self._dictation_action.setChecked(True)
+        self._hermes_action = QAction("Hermes (F9)", mode_menu)
+        self._hermes_action.setCheckable(True)
         mode_group = QActionGroup(mode_menu)
         mode_group.setExclusive(True)
-        mode_group.addAction(dictation_action)
-        mode_group.addAction(hermes_action)
+        mode_group.addAction(self._dictation_action)
+        mode_group.addAction(self._hermes_action)
         mode_menu.addActions(mode_group.actions())
+        self._dictation_action.triggered.connect(
+            lambda checked=False: self.mode_requested.emit("dictation") if checked else None
+        )
+        self._hermes_action.triggered.connect(
+            lambda checked=False: self.mode_requested.emit("hermes") if checked else None
+        )
 
         microphone_menu = menu.addMenu("Microfone")
         microphone_group = QActionGroup(microphone_menu)
@@ -104,6 +111,10 @@ class TrayController(QObject):
         self._status_window.show()
         self._status_window.raise_()
         self._status_window.activateWindow()
+
+    def set_mode(self, mode: str) -> None:
+        self._hermes_action.setChecked(mode == "hermes")
+        self._dictation_action.setChecked(mode != "hermes")
 
     def _activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason in {

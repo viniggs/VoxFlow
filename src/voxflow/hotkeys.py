@@ -20,6 +20,7 @@ VK_LCONTROL = 0xA2
 VK_RCONTROL = 0xA3
 VK_ADD = 0x6B
 VK_ESCAPE = 0x1B
+VK_F9 = 0x78
 HC_ACTION = 0
 
 
@@ -42,10 +43,12 @@ class NativeHoldHotkey:
         on_press: Callable[[], None],
         on_release: Callable[[], None],
         on_cancel: Callable[[], None] | None = None,
+        on_hermes_toggle: Callable[[], None] | None = None,
     ) -> None:
         self._on_press = on_press
         self._on_release = on_release
         self._on_cancel = on_cancel
+        self._on_hermes_toggle = on_hermes_toggle
         self._thread: threading.Thread | None = None
         self._thread_id = 0
         self._hook: int | None = None
@@ -54,6 +57,7 @@ class NativeHoldHotkey:
         self._startup_error: Exception | None = None
         self._ctrl_keys_down: set[int] = set()
         self._combo_down = False
+        self._f9_down = False
 
     def start(self) -> None:
         if self._thread is not None:
@@ -133,6 +137,18 @@ class NativeHoldHotkey:
                     except Exception:
                         logger.exception("hotkey_cancel_callback_failed")
                 return 1
+            if data.vkCode == VK_F9:
+                if is_down and not self._f9_down:
+                    self._f9_down = True
+                    if self._on_hermes_toggle is not None:
+                        try:
+                            self._on_hermes_toggle()
+                        except Exception:
+                            logger.exception("hermes_hotkey_callback_failed")
+                    return 1
+                if is_up:
+                    self._f9_down = False
+                    return 1
             return user32.CallNextHookEx(self._hook, code, message, data_pointer)
 
         self._callback_ref = callback

@@ -27,11 +27,13 @@ from PySide6.QtWidgets import (
 from voxflow.autostart import set_autostart
 from voxflow.config import AppConfig, save_config
 from voxflow.paths import AppPaths
+from voxflow.secrets import SecretStore
 
 
 class SettingsWindow(QWidget):
     saved = Signal(object)
     history_requested = Signal()
+    hermes_action_requested = Signal(str)
 
     def __init__(self, config: AppConfig, paths: AppPaths) -> None:
         super().__init__()
@@ -156,6 +158,9 @@ class SettingsWindow(QWidget):
     def _build_hermes_tab(self) -> None:
         tab, form = self._form_tab()
         self._hermes_url = QLineEdit(self._config.hermes.base_url)
+        self._hermes_key = QLineEdit()
+        self._hermes_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self._hermes_key.setPlaceholderText("Chave já armazenada; deixe vazio para manter")
         self._session_key = QLineEdit(self._config.hermes.session_key)
         self._half_duplex = QCheckBox("Não ouvir enquanto o Hermes fala")
         self._half_duplex.setChecked(self._config.hermes.half_duplex)
@@ -167,7 +172,20 @@ class SettingsWindow(QWidget):
         self._tts_voice = QLineEdit(self._config.hermes.tts.voice)
         self._tts_rate = QLineEdit(self._config.hermes.tts.rate)
         self._chatterbox_path = QLineEdit(self._config.hermes.tts.chatterbox_path)
+        self._hermes_instructions = self._editor(self._config.hermes.instructions, 105)
+        self._hermes_status = QLabel("Ainda não verificado")
+        health_button = QPushButton("Testar conexão")
+        health_button.clicked.connect(lambda: self.hermes_action_requested.emit("health"))
+        start_button = QPushButton("Iniciar Hermes")
+        start_button.clicked.connect(lambda: self.hermes_action_requested.emit("start"))
+        stop_button = QPushButton("Encerrar Hermes")
+        stop_button.clicked.connect(lambda: self.hermes_action_requested.emit("stop"))
+        controls = QHBoxLayout()
+        controls.addWidget(health_button)
+        controls.addWidget(start_button)
+        controls.addWidget(stop_button)
         form.addRow("URL:", self._hermes_url)
+        form.addRow("Chave da API:", self._hermes_key)
         form.addRow("Chave de sessão:", self._session_key)
         form.addRow("Half-duplex:", self._half_duplex)
         form.addRow("Screenshot:", self._attach_screenshot)
@@ -175,7 +193,9 @@ class SettingsWindow(QWidget):
         form.addRow("Voz:", self._tts_voice)
         form.addRow("Velocidade:", self._tts_rate)
         form.addRow("Chatterbox:", self._chatterbox_path)
-        form.addRow("Status:", QLabel("Integração ativada na Fase 4"))
+        form.addRow("Instruções do tutor:", self._hermes_instructions)
+        form.addRow("Serviço:", controls)
+        form.addRow("Status:", self._hermes_status)
         self._tabs.addTab(tab, "Hermes")
 
     def _build_history_tab(self) -> None:
@@ -230,12 +250,18 @@ class SettingsWindow(QWidget):
         self._autostart.setChecked(enabled)
         self.save(show_dialog=False)
 
+    def set_hermes_status(self, message: str) -> None:
+        self._hermes_status.setText(message)
+
     def save(self, *, show_dialog: bool = True) -> None:
         try:
             snippets = self._json_mapping(self._snippets.toPlainText(), "snippets")
             per_app = self._json_mapping(self._per_app.toPlainText(), "regras por app")
             config = self._updated_config(snippets, per_app)
             save_config(config, self._paths)
+            if self._hermes_key.text().strip():
+                SecretStore().set("hermes", self._hermes_key.text().strip())
+                self._hermes_key.clear()
             set_autostart(config.general.autostart)
         except (OSError, ValueError, TypeError) as exc:
             self._result.setText(f"Erro: {exc}")
@@ -313,6 +339,7 @@ class SettingsWindow(QWidget):
                 "session_key": self._session_key.text().strip(),
                 "half_duplex": self._half_duplex.isChecked(),
                 "attach_screenshot_on_command": self._attach_screenshot.isChecked(),
+                "instructions": self._hermes_instructions.toPlainText().strip(),
                 "tts": tts,
             }
         )

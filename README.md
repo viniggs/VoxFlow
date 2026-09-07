@@ -4,12 +4,14 @@ VoxFlow será um aplicativo Windows de ditado universal e estudo por voz integra
 
 ## Estado atual
 
-Fase 3: ditado universal com preview parcial na UI e overlay, limpeza OpenCode GO
-com rota visível, inserção automática, configurações gráficas, tray completo,
-histórico SQLite, autostart e sons.
+Fase 4: ditado universal completo e modo Hermes hands-free com VAD, resposta SSE
+em tempo real, leitura por frases, interrupção por voz, half-duplex e painel dedicado.
 
 Segure `Ctrl + Numpad +`, fale e solte. O preview aparece somente no VoxFlow;
 o texto final é inserido no aplicativo ativo depois que o atalho é solto.
+
+Pressione `F9` para entrar no modo Hermes. Fale normalmente e aguarde o silêncio
+encerrar cada turno; a conversa segue sem teclado. Pressione `F9` novamente para sair.
 
 ## Desenvolvimento
 
