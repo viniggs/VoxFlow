@@ -1,4 +1,4 @@
-"""GPU rendering for the orb's core: a real volumetric raymarch, rendered offscreen.
+"""GPU rendering for Friday: volumetric core, ordered pearl shell and soft light shafts.
 
 The core is the one part of the interface that a 2D rasteriser cannot do justice to.
 Light inside a volume is an integral along a ray, and faking it with stacked translucent
@@ -7,7 +7,7 @@ strokes reads as gauze rather than as light. So the core is raymarched on the GP
 Everything happens in an offscreen framebuffer and comes back as a ``QImage``. No OpenGL
 widget is ever placed in the window tree, which keeps the frameless, translucent,
 always-on-top surfaces exactly as they are. If a context cannot be created — a machine
-without usable OpenGL, a remote session — :func:`render_core` returns ``None`` and the
+without usable OpenGL, a remote session — :func:`render_orb` returns ``None`` and the
 caller falls back to the painter implementation.
 """
 
@@ -23,6 +23,7 @@ from PySide6.QtGui import (
     QSurfaceFormat,
     QVector2D,
     QVector3D,
+    QVector4D,
 )
 from PySide6.QtOpenGL import (
     QOpenGLFramebufferObject,
@@ -134,51 +135,6 @@ vec3 warp(vec3 p, float t) {
 #define CORE_BOUND 0.66
 #define MOTE_RADIUS 0.88
 
-vec3 hash3(vec3 p) {
-    return vec3(hash(p), hash(p + 19.7), hash(p + 71.3));
-}
-
-// A jittered lattice of points. One cell lookup per sample is enough because the motes
-// are far smaller than a cell, so neighbours never reach across the boundary.
-float moteField(vec3 p, float t) {
-    // The lattice is advected by a slow noise flow, which carries the motes *along*
-    // the surface. Displacing them radially instead is what made the shell pump.
-    vec3 drift = vec3(
-        fbm(p * 0.85 + vec3(0.0, t * 0.05, 0.0)),
-        fbm(p * 0.85 + vec3(4.1, 0.0, t * 0.04)),
-        fbm(p * 0.85 + vec3(t * 0.045, 3.3, 1.7))
-    );
-    vec3 q = p + (drift - 0.5) * 0.11;
-    vec3 g = q * 38.0;
-    vec3 cell = floor(g);
-    vec3 f = fract(g) - 0.5;
-    vec3 jitter = (hash3(cell) - 0.5) * 0.74;
-    return smoothstep(0.17, 0.015, length(f - jitter));
-}
-
-// The shell is a surface, so it is intersected rather than marched: two samples per
-// pixel instead of sixty-four, for a field of several thousand motes.
-vec3 shellMotes(vec3 ro, vec3 rd) {
-    float b = dot(ro, rd);
-    float c = dot(ro, ro) - MOTE_RADIUS * MOTE_RADIUS;
-    float h = b * b - c;
-    if (h <= 0.0) return vec3(0.0);
-    h = sqrt(h);
-    float t = uTime * uFlow * 0.55;
-    vec3 total = vec3(0.0);
-    // Far face first, then near: the near layer is brighter, and that reads as depth.
-    float hits[2] = float[](-b + h, -b - h);
-    float weights[2] = float[](0.40, 1.0);
-    for (int i = 0; i < 2; i++) {
-        float m = moteField(ro + rd * hits[i], t);
-        if (m <= 0.0) continue;
-        vec3 tint = mix(uDeep, uMid, weights[i]);
-        if (i == 1) tint = mix(tint, uHot, 0.30);
-        total += tint * m * weights[i];
-    }
-    return total * (0.62 + 0.38 * uAmplitude);
-}
-
 struct Sample { float density; float veins; };
 
 Sample volume(vec3 pos, float t) {
@@ -226,7 +182,7 @@ void main() {
     for (int i = 0; i < STEPS; i++) {
         float t = near + (float(i) + 0.5) * span;
         vec3 pos = origin + direction * t;
-        Sample s = volume(pos, uTime * uFlow);
+        Sample s = volume(pos, uTime * uFlow * 2.30);
         if (s.density <= 0.0) continue;
 
         // Staying inside the palette by mixing only between its three colours keeps
@@ -241,7 +197,7 @@ void main() {
     }
     }
 
-    colour += shellMotes(origin, direction);
+
 
     // Radiance has no upper bound, but a pixel does; tone map before writing out.
     vec3 mapped = vec3(1.0) - exp(-colour * 1.55);
@@ -302,6 +258,113 @@ void main() {
 """
 
 
+
+# Each pearl is a small GPU billboard. Rings have proportional populations, keeping
+# spacing even at the poles. No random offsets, particle simulation or CPU uploads.
+_PEARL_VERTEX = """
+#version 330 core
+out vec2 pearlUV;
+out float pearlDepth;
+out float pearlCrest;
+uniform float uTime;
+uniform float uAmplitude;
+uniform float uSize;
+uniform vec4 uMotion;
+void main() {
+    int bead = gl_VertexID / 6;
+    int ring = bead / 224;
+    int column = bead % 224;
+    float lat = 3.14159265 * (float(ring) + 0.5) / 112.0;
+    int population = max(4, int(floor(224.0 * sin(lat) / 4.0 + 0.5)) * 4);
+    vec2 corners[6] = vec2[](vec2(-1,-1),vec2(1,-1),vec2(1,1),
+                             vec2(-1,-1),vec2(1,1),vec2(-1,1));
+    pearlUV = corners[gl_VertexID % 6];
+    if (column >= population) {
+        gl_Position = vec4(4,4,0,1);
+        pearlDepth = 0.0; pearlCrest = 0.0; return;
+    }
+    float longitude = 6.2831853 * float(column) / float(population);
+    vec3 normal = vec3(sin(lat)*cos(longitude), cos(lat), sin(lat)*sin(longitude));
+    // Smooth waves in spherical coordinates inherited from a continuous 3D field.
+    // Every point keeps its neighbours; no seam at longitude zero or polar noise.
+    float frequency = 10.0 + uMotion.w * 0.65;
+    float wave = 0.52 * sin(dot(normal, vec3(1.0,0.7,0.4))*frequency-uTime)
+               + 0.30 * sin(dot(normal, vec3(-0.3,1.0,0.8))*frequency*1.45+uTime*0.73)
+               + 0.18 * sin(dot(normal, vec3(0.8,-0.4,1.0))*frequency*1.9-uTime*0.51);
+    float swell = uMotion.x + uAmplitude * uMotion.y;
+    float radius = 0.88 * (1.0 + swell * wave + uAmplitude * 0.008);
+    // A bounded tangential current bends the rows into liquid ribbons.
+    vec3 current = vec3(normal.y*normal.z, -normal.x*normal.z, normal.x*normal.y);
+    vec3 pos = radius * normalize(normal + current * sin(uTime*0.38) * 0.025);
+    // Fixed elegant tilt; no random drift or loss of the formation.
+    pos.yz = mat2(0.9563,-0.2924,0.2924,0.9563) * pos.yz;
+    float depth = clamp(0.5 - pos.z / 1.9, 0.0, 1.0);
+    vec2 projected = pos.xy * 1.95 / ((3.0 + pos.z) * 1.02);
+    pearlDepth = depth;
+    pearlCrest = 0.5 + 0.5 * wave;
+    float reach = max(0.85, uSize * 0.0027) * (0.72 + 0.28 * depth);
+    gl_Position = vec4(projected + pearlUV * reach * 2.0 / uSize, 0, 1);
+}
+"""
+
+_PEARL_FRAGMENT = """
+#version 330 core
+in vec2 pearlUV;
+in float pearlDepth;
+in float pearlCrest;
+out vec4 frag;
+uniform vec3 uMid;
+uniform vec3 uHot;
+uniform float uAmplitude;
+// Integrate the light footprint over the pixel, rather than sampling only its
+// centre. Subpixel pearls keep their energy while crossing pixel boundaries.
+vec2 erfApprox(vec2 x) {
+    return tanh(1.128379 * x + 0.102772 * x*x*x);
+}
+float pixelGaussian(vec2 p, vec2 footprint, float sigma) {
+    vec2 lo = (p - footprint * 0.5) / (1.414214 * sigma);
+    vec2 hi = (p + footprint * 0.5) / (1.414214 * sigma);
+    vec2 integral = erfApprox(hi) - erfApprox(lo);
+    return integral.x * integral.y * (1.5707963 * sigma*sigma)
+        / (footprint.x * footprint.y);
+}
+void main() {
+    vec2 footprint = max(fwidth(pearlUV), vec2(0.0001));
+    float halo = pixelGaussian(pearlUV, footprint, 0.36);
+    float heart = pixelGaussian(pearlUV, footprint, 0.24);
+    float light = (heart * 1.40 + halo * 0.32)
+        * (0.055 + 0.945 * smoothstep(0.25,0.70,pearlDepth))
+        * (0.56 + 0.65 * pearlCrest + 0.22 * uAmplitude);
+    vec3 tint = mix(uMid, uHot, 0.35 + 0.65 * heart);
+    frag = vec4(tint * light, light);
+}
+"""
+
+_RAYS = """
+#version 330 core
+in vec2 uv;
+out vec4 frag;
+uniform float uTime;
+uniform float uTurbulence; // focus x
+uniform float uFlow;       // focus y
+uniform float uAmplitude;
+uniform vec3 uMid;
+void main() {
+    vec2 p = uv - vec2(uTurbulence, 1.0-uFlow);
+    float r = length(p);
+    float a = atan(p.y,p.x);
+    float t = uTime * 0.055;
+    // Smooth angular lobes, with finer silk filaments inside each shaft.
+    float shafts = pow(0.5+0.5*sin(a*9.0 + sin(a*3.0+t)*1.2-t), 18.0);
+    float silk = pow(0.5+0.5*sin(a*37.0+sin(a*7.0-t)*2.0+t), 28.0);
+    float mist = exp(-r*5.0) * 0.025;
+    float light = (shafts*0.11 + silk*0.032)
+        * smoothstep(0.055,0.20,r) * exp(-r*4.2) + mist;
+    light *= 0.85 + 0.30*uAmplitude;
+    frag = vec4(uMid*light, light);
+}
+"""
+
 class _ShaderCore:
     """Owns the offscreen context and the three passes that build one core frame."""
 
@@ -319,6 +382,9 @@ class _ShaderCore:
         self._blur_b: QOpenGLFramebufferObject | None = None
         self._final: QOpenGLFramebufferObject | None = None
         self._size = 0
+        self._pearls: QOpenGLShaderProgram | None = None
+        self._motion = (0.018, 0.0, 0.0, 2.0)
+        self._phase = 0.0
 
     # ------------------------------------------------------------------ Setup
 
@@ -355,6 +421,7 @@ class _ShaderCore:
         self._surface = surface
         self._context = context
         self._raymarch = self._program(_RAYMARCH.replace("__NOISE__", _NOISE), "raymarch")
+        self._pearls = self._program(_PEARL_FRAGMENT, "pearls", _PEARL_VERTEX)
         self._blur = self._program(_BRIGHT_BLUR, "blur")
         self._composite = self._program(_COMPOSITE, "composite")
         self._vao = QOpenGLVertexArrayObject()
@@ -367,9 +434,9 @@ class _ShaderCore:
         context.doneCurrent()
 
     @staticmethod
-    def _program(fragment: str, name: str) -> QOpenGLShaderProgram:
+    def _program(fragment: str, name: str, vertex: str = _VERTEX) -> QOpenGLShaderProgram:
         program = QOpenGLShaderProgram()
-        if not program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, _VERTEX):
+        if not program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Vertex, vertex):
             raise RuntimeError(f"{name} vertex shader: {program.log()}")
         if not program.addShaderFromSourceCode(QOpenGLShader.ShaderTypeBit.Fragment, fragment):
             raise RuntimeError(f"{name} fragment shader: {program.log()}")
@@ -451,7 +518,24 @@ class _ShaderCore:
         program.setUniformValue("uHot", _vector(palette.core, 1.0, whiten=0.62))
         functions.glDrawArrays(_GL_TRIANGLES, 0, 3)
         program.release()
+        self._pass_pearls(functions, palette, amplitude)
         scene.release()
+
+    def _pass_pearls(self, functions, palette: StatePalette, amplitude: float) -> None:
+        program = self._pearls
+        assert program is not None
+        functions.glEnable(_GL_BLEND)
+        functions.glBlendFunc(1, 1)  # Add emitted light, including the far hemisphere.
+        program.bind()
+        program.setUniformValue1f("uTime", self._phase)
+        program.setUniformValue1f("uSize", float(self._size))
+        program.setUniformValue1f("uAmplitude", float(amplitude))
+        program.setUniformValue("uMotion", QVector4D(*self._motion))
+        program.setUniformValue("uMid", _vector(palette.core))
+        program.setUniformValue("uHot", _vector(palette.core, whiten=0.94))
+        functions.glDrawArrays(_GL_TRIANGLES, 0, 112 * 224 * 6)
+        program.release()
+        functions.glDisable(_GL_BLEND)
 
     def _pass_bloom(self, functions) -> None:  # noqa: ANN001
         blur, first, second, scene = self._blur, self._blur_a, self._blur_b, self._scene
@@ -522,7 +606,26 @@ def _vector2(pair: tuple[float, float]) -> QVector2D:
     return QVector2D(pair[0], pair[1])
 
 
+class _ShaderRays(_ShaderCore):
+    def _create(self) -> None:
+        super()._create()
+        assert self._context is not None and self._surface is not None
+        self._context.makeCurrent(self._surface)
+        self._raymarch = self._program(_RAYS, "rays")
+        self._context.doneCurrent()
+
+    def _pass_pearls(self, functions, palette: StatePalette, amplitude: float) -> None:
+        pass
+
+
 _CORE = _ShaderCore()
+_RAY_RENDERER = _ShaderRays()
+
+
+def render_rays(palette: StatePalette, seconds: float, focus: tuple[float, float],
+                amplitude: float) -> QImage | None:
+    """Soft shafts at a fixed low resolution, independent of the orb framebuffer."""
+    return _RAY_RENDERER.render(384, palette, seconds, focus[0], focus[1], amplitude)
 
 
 def render_orb(
@@ -532,7 +635,11 @@ def render_orb(
     turbulence: float,
     flow: float,
     amplitude: float,
+    motion: tuple[float, float, float, float] = (0.018, 0.0, 0.0, 2.0),
+    phase: float = 0.0,
 ) -> QImage | None:
     """Render one whole orb — core and mote shell — or ``None`` without a GPU."""
 
+    _CORE._motion = motion
+    _CORE._phase = phase
     return _CORE.render(size, palette, seconds, turbulence, flow, amplitude)

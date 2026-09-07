@@ -13,6 +13,14 @@ o texto final é inserido no aplicativo ativo depois que o atalho é solto.
 Pressione `F9` para entrar no modo Hermes. Fale normalmente e aguarde o silêncio
 encerrar cada turno; a conversa segue sem teclado. Pressione `F9` novamente para sair.
 
+## Friday — visual 0.6.0
+
+Esfera com núcleo volumétrico, malha densa de aproximadamente 16 mil pontos e
+ondulações suaves por estado. Núcleo, pérolas e raios de luz são calculados na GPU.
+A malha reage ao microfone e ao envelope de palavras do TTS. O restante da composição
+usa Qt. Prévia independente: `.venv/Scripts/python.exe scripts/preview_friday.py`
+(áudio simulado, sem conectar microfone ou Hermes).
+
 ## Desenvolvimento
 
 ```powershell

@@ -249,3 +249,47 @@ resumo/revisão ao encerrar. Não iniciar antes do aceite manual da versão 0.5.
 - O fallback CPU da Fase 1 garante funcionamento, mas o empacotamento independente das DLLs CUDA continua previsto para a Fase 6.
 - Não implementar fases futuras antes do OK explícito.
 - Validar uma vez por entrega, proporcionalmente ao risco.
+
+
+## UI Friday — malha de pérolas e raios GPU (2026-09-07)
+
+- Estado encontrado: `gpu.py` tinha mudanças locais do Opus na malha aleatória;
+  README/continuidade ainda descreviam principalmente a Fase 4, sem este visual.
+- Núcleo volumétrico preservado. Malha aleatória substituída por billboards de pérolas
+  em anéis simétricos, com população proporcional à circunferência, halo e profundidade.
+  Posições e ondas calculadas no vertex shader, sem atualização de partículas pela CPU.
+- Repouso: respiração lenta; ouvindo: ondas suaves com entrada do microfone;
+  pensando: bandas entrelaçadas; falando: expansão guiada pelo envelope já existente.
+  Transições de 1,15 s, fase contínua e suavização de áudio independente do FPS.
+- Raios triangulares substituídos por faixas suaves no fragment shader, em buffer
+  separado de 384 px. Origem acompanha o centro real da esfera nas duas janelas.
+- Esfera maior no painel principal e no painel Hermes. O restante do fundo e composição
+  continua em Qt/QPainter: não afirmar que toda a interface é desenhada na GPU.
+- Fala usa tempos das palavras do Edge TTS, não análise PCM/espectral; sem tempos,
+  o mecanismo anterior usa cadência sintética. Integração de voz não foi alterada.
+- Prévia interativa: `.venv/Scripts/python.exe scripts/preview_friday.py`.
+  Botões alternam os estados; áudio SIMULADO, sem microfone, Hermes ou rede.
+  `--capture` salva imagens da janela real em `build/friday-preview`.
+- Verificação: shaders renderizados em OpenGL 3.3, imagens inspecionadas; 16 testes
+  existentes de UI/sincronia/balões passaram, Ruff passou. Sem teste ao vivo de TTS.
+- Alterações estão no código-fonte; instalador/executável de releases não foi refeito.
+
+### Refinamento pela referência de superfície fluida
+
+Malha ampliada para 72 anéis e até 144 pontos por anel (cerca de 6,6 mil pontos).
+Três ondas contínuas sobre a esfera e uma corrente tangencial limitada deformam
+a superfície sem dispersar os pontos. Tamanho individual reduzido para manter
+a separação visual; hemisfério traseiro atenuado. Núcleo preservado.
+Capturas dos quatro estados renderizadas em OpenGL e imagem inspecionada.
+Prévia interativa atualizada; áudio continua simulado nessa prévia.
+
+Refinamento seguinte: 112 anéis / até 224 pontos por anel (~16 mil pontos), frequência espacial das ondas aumentada e altura reduzida em cerca de 70%. Corrente tangencial e expansão por áudio também reduzidas para preservar a silhueta esférica. Captura GPU conferida; prévia atualizada.
+
+Ajuste pontual: brilho das pérolas integrado sobre a área do pixel (Gaussianas com footprint por derivadas) para reduzir cintilação subpixel. Núcleo 15% mais rápido. Shaders renderizaram com sucesso; melhora perceptiva das piscadas ainda depende da observação em movimento pelo usuário.
+
+## Visual aprovado e entrega 0.6.0
+
+Usuário aprovou explicitamente a malha final e o núcleo. Velocidade final da
+nebulosa: multiplicador 2,30 no tempo do volume (substitui o ajuste de 15%).
+Malha preservada após o aceite. Autorizada a geração/publicação do instalador
+local e salvamento das alterações. Não há remoto Git configurado.

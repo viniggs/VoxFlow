@@ -31,7 +31,7 @@ from voxflow.ui.theme import StatePalette, VisualState, lerp_color, palette_for,
 
 _ACTIVE_FPS = 60
 _CALM_FPS = 24
-_TRANSITION_SECONDS = 0.28
+_TRANSITION_SECONDS = 1.15
 _HISTORY_LENGTH = 72
 _SEED = 20260907
 
@@ -94,15 +94,15 @@ class Motion:
 #: Each state moves in its own way, not merely at its own speed.
 _MOTION: dict[VisualState, Motion] = {
     # Barely alive: a slow, shallow shimmer.
-    VisualState.IDLE: Motion(0.006, 0.000, 0.55, 2.0, 0.25, 0.8, 0.30, 0.30),
+    VisualState.IDLE: Motion(0.022, 0.000, 0.42, 2.0, 0.25, 0.8, 0.30, 0.30),
     # Attentive: coherent bands drawing in and out with your voice.
-    VisualState.LISTENING: Motion(0.007, 0.010, 2.20, 4.5, 0.06, 1.4, 0.45, 0.50),
+    VisualState.LISTENING: Motion(0.032, 0.018, 0.75, 3.0, 0.06, 1.4, 0.45, 0.50),
     # Working: a fast, fine shimmer while the words are decoded.
-    VisualState.TRANSCRIBING: Motion(0.008, 0.000, 4.50, 7.0, 0.12, 2.2, 0.70, 1.05),
-    # Churning: every mote travels on its own, some in, some out.
-    VisualState.THINKING: Motion(0.012, 0.000, 1.30, 3.0, 0.90, 1.8, 1.00, 0.85),
-    # Voiced: the shell snaps outward on every word she speaks.
-    VisualState.SPEAKING: Motion(0.007, 0.012, 3.00, 3.5, 0.05, 1.6, 0.58, 0.70),
+    VisualState.TRANSCRIBING: Motion(0.038, 0.000, 1.30, 7.0, 0.12, 2.2, 0.70, 1.05),
+    # Interlaced travelling bands, preserving the ordered formation.
+    VisualState.THINKING: Motion(0.045, 0.000, 0.95, 5.0, 0.90, 1.8, 1.00, 0.85),
+    # Voiced: rounded expansions following the playback envelope.
+    VisualState.SPEAKING: Motion(0.028, 0.026, 1.15, 4.0, 0.05, 1.6, 0.58, 0.70),
     # Delivering: a brief, quick contraction.
     VisualState.INJECTING: Motion(0.008, 0.000, 4.00, 3.5, 0.08, 2.0, 0.55, 1.00),
     # Faulted: a slow, uneasy tremor.
@@ -229,6 +229,7 @@ class Orb(QWidget):
         self._history: deque[float] = deque([0.0] * _HISTORY_LENGTH, maxlen=_HISTORY_LENGTH)
         self._ripples: list[float] = []
         self._time = 0.0
+        self._shell_phase = 0.0
         self._last_frame = time.perf_counter()
         self._glow_cache: QPixmap | None = None
         self._glow_key: tuple[int, int, int, int] = (0, 0, 0, 0)
@@ -359,8 +360,9 @@ class Orb(QWidget):
         self._time += delta
         if self._transition < 1.0:
             self._transition = min(1.0, self._transition + delta / _TRANSITION_SECONDS)
+        self._shell_phase += delta * self._current_motion().speed
         rising = self._target_amplitude > self._amplitude
-        smoothing = 0.45 if rising else 0.14
+        smoothing = 1.0 - math.exp(-delta / (0.065 if rising else 0.23))
         self._amplitude += (self._target_amplitude - self._amplitude) * smoothing
         self._history.append(self._amplitude)
         self._ripples = [value + delta * 1.5 for value in self._ripples if value < 1.0]
@@ -422,6 +424,8 @@ class Orb(QWidget):
             motion.core_turbulence,
             motion.core_flow,
             self._amplitude,
+            (motion.swell, motion.audio, 0.0, motion.bands),
+            self._shell_phase,
         )
         if image is None:
             return False
@@ -670,7 +674,7 @@ def render_orb_icon(size: int = 256, state: VisualState = VisualState.LISTENING)
     painter.setBrush(body)
     painter.drawEllipse(center, inner * 1.6, inner * 1.6)
 
-    for x, y, depth, _ in build_shell(220):
+    for x, y, depth, _, _ in build_shell(220):
         scale = radius * (0.87 + 0.13 * depth)
         colour = lerp_color(palette.glow, palette.core, depth)
         if depth > 0.8:

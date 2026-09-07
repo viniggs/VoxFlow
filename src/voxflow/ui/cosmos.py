@@ -21,6 +21,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QWidget
 
+from voxflow.ui.gpu import render_rays
 from voxflow.ui.theme import (
     NEBULA_A,
     NEBULA_B,
@@ -38,7 +39,6 @@ from voxflow.ui.theme import (
 
 _COSMOS_FPS = 30
 _STAR_SEED = 20260907
-_RAY_COUNT = 14
 _DUST_COUNT = 30
 
 #: Parallax planes: (depth factor, drift speed multiplier). Nearer planes move faster.
@@ -331,44 +331,13 @@ class CosmicPainter:
         return layers
 
     def _paint_rays(self, painter: QPainter, rect: QRectF) -> None:
-        """Slow god rays converging on the deity: a suggestion, never a spoke."""
-
-        palette = self.current_palette()
-        center = QPointF(
-            rect.left() + rect.width() * self._focus[0],
-            rect.top() + rect.height() * self._focus[1],
-        )
-        reach = max(rect.width(), rect.height()) * 1.15
-        rotation = self._time * 1.6
-        intensity = int((4 + self._amplitude * 7) * self._brightness)
-        if intensity <= 0:
+        image = render_rays(self.current_palette(), self._time, self._focus, self._amplitude)
+        if image is None:
             return
         painter.save()
-        painter.setPen(Qt.PenStyle.NoPen)
-        for index in range(_RAY_COUNT):
-            angle = math.radians(rotation + index * (360 / _RAY_COUNT))
-            width = math.radians(1.5 + 1.1 * math.sin(self._time * 0.7 + index))
-            alpha = int(intensity * (0.45 + 0.55 * abs(math.sin(self._time * 0.35 + index))))
-            polygon = QPolygonF(
-                [
-                    center,
-                    QPointF(
-                        center.x() + math.cos(angle - width) * reach,
-                        center.y() + math.sin(angle - width) * reach,
-                    ),
-                    QPointF(
-                        center.x() + math.cos(angle + width) * reach,
-                        center.y() + math.sin(angle + width) * reach,
-                    ),
-                ]
-            )
-            gradient = QRadialGradient(center, reach)
-            gradient.setColorAt(0.0, with_alpha(palette.core, 0))
-            gradient.setColorAt(0.16, with_alpha(palette.core, alpha))
-            gradient.setColorAt(0.6, with_alpha(palette.glow, alpha // 3))
-            gradient.setColorAt(1.0, with_alpha(palette.glow, 0))
-            painter.setBrush(gradient)
-            painter.drawPolygon(polygon)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Plus)
+        painter.setOpacity(self._brightness)
+        painter.drawImage(rect, image)
         painter.restore()
 
     def _paint_stars(self, painter: QPainter, rect: QRectF) -> None:

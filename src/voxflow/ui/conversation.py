@@ -249,7 +249,7 @@ class ConversationOverlay(QWidget):
 
         self._fade = _FadeMask(self)
 
-        self._orb = Orb(146)
+        self._orb = Orb(240)
         self._orb.use_external_clock()
         self._orb.clicked.connect(self.toggle_requested.emit)
         self._caption = QLabel("Pressione F9 para chamar a Friday")
@@ -418,6 +418,8 @@ class ConversationOverlay(QWidget):
         self._last_frame = now
         self._cosmos.advance(delta)
         self._orb.advance(delta)
+        center = self._orb.geometry().center()
+        self._cosmos.set_focus(center.x() / self.width(), center.y() / self.height())
         self.update()
 
     # -------------------------------------------------------------- Qt hooks

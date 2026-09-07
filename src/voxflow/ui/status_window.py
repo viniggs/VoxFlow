@@ -284,6 +284,8 @@ class StatusWindow(CosmicPanel):
 
     def on_frame(self, delta: float) -> None:
         self._orb.advance(delta)
+        center = self._orb.geometry().center()
+        self.cosmos.set_focus(center.x() / self.width(), center.y() / self.height())
 
     # ------------------------------------------------------------ Responsive
 
@@ -296,7 +298,8 @@ class StatusWindow(CosmicPanel):
 
         width, height = self.width(), self.height()
         scale = max(0.66, min(1.75, min(width / 760.0, height / 720.0)))
-        self._orb.set_diameter(int(max(84, min(320, min(width, height) * 0.30))))
+        diameter = max(84, min(620, width * 0.78, height * 0.55, height - 300))
+        self._orb.set_diameter(int(diameter))
         # Metrics and the event tail are the first things to go when space runs out.
         show_metrics = height >= 430
         show_events = height >= 560
