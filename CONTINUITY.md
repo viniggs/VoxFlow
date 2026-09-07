@@ -313,3 +313,17 @@ a conversa e o orbe permaneçam imóveis ao revelar/esconder os botões.
 
 Prévia agora inicia com áudio simulado DESLIGADO; botão Simular voz permite
 ativá-lo explicitamente. Ciclo sintético (~2,7 s) não pertence ao app instalado.
+
+## 0.6.2 — moldura, movimento e tamanho das janelas
+
+- Janelas com pintura própria não solicitam borda, backdrop ou arredondamento extra
+  do DWM. Contorno arredondado do Qt permanece como único desenho da borda.
+- WindowInteraction compartilhado: arrastar fundo vazio/topo; redimensionar pelas
+  bordas/cantos com cursores apropriados, captura do mouse e tamanho mínimo.
+- F9 sem largura/altura fixas; posicionamento automático apenas na primeira abertura,
+  preserva posição/tamanho nas seguintes durante a sessão. Orbe acompanha o tamanho.
+- Testes de redimensionamento ancorado, limites, movimento por eventos de mouse e
+  reabertura passaram. Corrigida entrega de eventos durante descarte de objetos Qt:
+  event filters globais precisam tolerar atributos do dono já liberados.
+- Controles por clique e reação da malha preservados. Verificação visual da borda
+  nativa no desktop ainda depende da observação do usuário.

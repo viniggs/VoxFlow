@@ -7,11 +7,10 @@ import random
 import time
 from dataclasses import dataclass
 
-from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, QTimer
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import (
     QCloseEvent,
     QColor,
-    QMouseEvent,
     QPainter,
     QPainterPath,
     QPen,
@@ -531,7 +530,9 @@ class CosmicPanel(CosmicWidget):
     ) -> None:
         super().__init__(None, density=density, brightness=brightness)
         self._radius = radius
-        self._drag_origin: QPoint | None = None
+        from voxflow.ui.window_interaction import WindowInteraction
+
+        self._window_interaction = WindowInteraction(self)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_QuitOnClose, False)
@@ -544,20 +545,6 @@ class CosmicPanel(CosmicWidget):
     def showEvent(self, event) -> None:  # noqa: ANN001, N802
         super().showEvent(event)
         apply_native_window_effects(self, acrylic=False)
-
-    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_origin = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
-        if self._drag_origin is not None and event.buttons() & Qt.MouseButton.LeftButton:
-            self.move(event.globalPosition().toPoint() - self._drag_origin)
-        super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802
-        self._drag_origin = None
-        super().mouseReleaseEvent(event)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         event.ignore()

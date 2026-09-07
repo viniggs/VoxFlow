@@ -225,7 +225,12 @@ class ConversationOverlay(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        self.setFixedWidth(_PANEL_WIDTH)
+        from voxflow.ui.window_interaction import WindowInteraction
+
+        self.setMinimumSize(400, 560)
+        self.resize(_PANEL_WIDTH, 800)
+        self._positioned = False
+        self._window_interaction = WindowInteraction(self)
         self._cosmos = CosmicPainter(density=0.55, brightness=0.85)
         self._cosmos.set_focus(0.5, 0.82)
         self._last_frame = time.perf_counter()
@@ -360,7 +365,9 @@ class ConversationOverlay(QWidget):
             self._voice.blockSignals(False)
 
     def present(self) -> None:
-        self._position()
+        if not self._positioned:
+            self._position()
+            self._positioned = True
         self.show()
         self.raise_()
         apply_native_window_effects(self, acrylic=False)
@@ -409,9 +416,9 @@ class ConversationOverlay(QWidget):
         if geometry is None:
             return
         height = min(int(geometry.height() * 0.74), 880)
-        self.setFixedHeight(height)
+        self.resize(self.width(), max(self.minimumHeight(), height))
         self.move(
-            geometry.right() - _PANEL_WIDTH - 26,
+            geometry.right() - self.width() - 26,
             geometry.top() + (geometry.height() - height) // 2,
         )
 
@@ -440,6 +447,8 @@ class ConversationOverlay(QWidget):
     def resizeEvent(self, event) -> None:  # noqa: ANN001, N802
         super().resizeEvent(event)
         self._cosmos.resize(self.size())
+        diameter = int(max(240, min(560, self.width() - 44, self.height() * 0.45)))
+        self._orb.set_diameter(diameter)
         self._fade.setGeometry(0, 0, self.width(), 62)
         self._fade.raise_()
 

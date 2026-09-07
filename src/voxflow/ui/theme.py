@@ -206,6 +206,11 @@ def apply_native_window_effects(widget: QWidget, *, acrylic: bool = True) -> Non
         (_DWMWA_USE_IMMERSIVE_DARK_MODE, 1),
         (_DWMWA_WINDOW_CORNER_PREFERENCE, _DWMWCP_ROUND),
     ]
+    if not acrylic:
+        # Qt already paints the translucent rounded outline. A second DWM frame
+        # has a different radius and shows pointed corners outside that outline.
+        attributes.extend([(34, -2), (_DWMWA_WINDOW_CORNER_PREFERENCE, 1),
+                           (_DWMWA_SYSTEMBACKDROP_TYPE, 1)])
     if acrylic:
         attributes.append((_DWMWA_SYSTEMBACKDROP_TYPE, _DWMSBT_TRANSIENTWINDOW))
     for attribute, value in attributes:
