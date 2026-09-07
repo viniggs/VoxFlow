@@ -1,6 +1,7 @@
 """Preview the actual Friday UI without microphone, TTS, or gateway connections.
 
 Run: .venv/Scripts/python.exe scripts/preview_friday.py
+Voice simulation is off until the user clicks "Simular voz".
 Capture: append --capture to write previews to build/friday-preview.
 """
 from __future__ import annotations
@@ -58,6 +59,10 @@ def main() -> None:
         button = QPushButton(label)
         button.clicked.connect(lambda checked=False, mood=state: select(mood))
         layout.addWidget(button)
+    simulate_voice = QPushButton('Simular voz')
+    simulate_voice.setCheckable(True)
+    simulate_voice.setChecked(False)
+    layout.addWidget(simulate_voice)
     select(VisualState.LISTENING)
     window.show()
     app.processEvents()
@@ -84,7 +89,8 @@ def main() -> None:
     def animate() -> None:
         nonlocal elapsed
         elapsed += 0.033
-        voiced = window._orb.state in (VisualState.SPEAKING, VisualState.LISTENING)
+        voiced = (simulate_voice.isChecked()
+                  and window._orb.state in (VisualState.SPEAKING, VisualState.LISTENING))
         level = max(0.0, math.sin(elapsed * 2.3)) * (0.4 + 0.4 * math.sin(elapsed * 9)**2)
         window._orb.set_amplitude(level if voiced else 0.0)
         window._cosmos.set_amplitude(level if voiced else 0.0)

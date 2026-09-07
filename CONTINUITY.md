@@ -310,3 +310,6 @@ local e salvamento das alterações. Não há remoto Git configurado.
 Controles F9 (voz, ajustes, ocultar) agora alternam por clique no orbe.
 Hover não mostra controles. Layout reserva a altura da linha oculta para que
 a conversa e o orbe permaneçam imóveis ao revelar/esconder os botões.
+
+Prévia agora inicia com áudio simulado DESLIGADO; botão Simular voz permite
+ativá-lo explicitamente. Ciclo sintético (~2,7 s) não pertence ao app instalado.
