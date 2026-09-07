@@ -65,6 +65,8 @@ explicitamente dispensado pelo usuário e permanece não testado.
 - Logs de `stt_ms`, `inject_ms` e `total_after_release_ms` sem registrar o conteúdo ditado.
 - Empacotamento exclui o ICU 78 do Poppler exposto pelo ambiente Codex; o Qt usa a
   biblioteca compatível do Windows. O script de release falha se essas DLLs voltarem ao pacote.
+- O instalador também remove `icuuc.dll` e `icudt78.dll` deixadas pela primeira build
+  da Fase 1, garantindo correção ao atualizar por cima sem desinstalação manual.
 
 ## Próxima fase — somente após OK do usuário
 

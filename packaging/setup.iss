@@ -38,6 +38,12 @@ Name: "autostart"; Description: "Iniciar o VoxFlow com o Windows"; GroupDescript
 [Files]
 Source: "{#BuildRoot}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[InstallDelete]
+; Remove ICU 78 accidentally shipped by the previous Phase 1 installer. Qt 6
+; must resolve Windows' system ICU compatibility DLL instead.
+Type: files; Name: "{app}\_internal\icuuc.dll"
+Type: files; Name: "{app}\_internal\icudt78.dll"
+
 [Icons]
 Name: "{group}\VoxFlow"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\Encerrar VoxFlow"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--quit"
