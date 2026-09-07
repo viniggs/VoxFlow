@@ -1,7 +1,7 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-07
-Versão: 0.5.4
+Versão: 0.5.5
 Fase concluída no código: Fase 4, aguardando aceite manual
 
 ## Objetivo
@@ -230,6 +230,12 @@ conversa nomeada e recebe a fala nova como uma mensagem distinta, sem prefixos o
 de histórico. A UI de configurações expõe os dois identificadores com nomes diferentes. Para
 começar uma conversa nova no futuro, basta escolher outro `conversation_id`; isso não apaga a
 conversa antiga.
+
+### Correção 0.5.5 — seletor de voz no painel ao vivo
+
+O seletor de voz agora aparece diretamente no painel `VoxFlow — Hermes ao vivo`, e não apenas
+em Configurações. A escolha emite um evento para a janela de configurações, salva a opção e
+recria o speaker com a voz selecionada.
 
 ## Próxima fase — somente após OK do usuário
 

@@ -30,13 +30,13 @@ no Windows Credential Manager. O instalador é por usuário, sem certificado, e 
 onedir + Inno Setup.
 
 Contexto essencial: o usuário quer uma experiência visual verificável e não aceita mais uma
-caixa-preta. A versão 0.5.4 implementa preview parcial na janela e no overlay enquanto o atalho
+caixa-preta. A versão 0.5.5 implementa preview parcial na janela e no overlay enquanto o atalho
 está pressionado, além de indicar Muse, DeepSeek ou bruto e o motivo do fallback. “Tempo real”
 aqui significa apenas o preview na UI: nunca injete parciais no Notepad, Chrome ou outro
 aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa visibilidade em
 todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco horas é crítico.
 
-A versão atual é 0.5.4/Fase 4. Ela acrescenta modo Hermes hands-free em `F9`, VAD,
+A versão atual é 0.5.5/Fase 4. Ela acrescenta modo Hermes hands-free em `F9`, VAD,
 `/v1/responses` com SSE, painel de resposta, Edge TTS por sentença, barge-in, half-duplex e
 controles de health/start/stop. A API local do Hermes já foi habilitada em `127.0.0.1:8642`;
 a chave está no `.env` do Hermes e no Windows Credential Manager, nunca em arquivos do repo.
@@ -54,7 +54,10 @@ histórico em texto, não adicionar prefixos e não criar uma conversa nova a ca
 valor padrão continua `voxflow:estudo` para manter o histórico já existente. Para iniciar um
 novo contexto no futuro, altere somente o `conversation_id`, sem apagar o anterior.
 
-Ao assumir, confirme primeiro se a entrega 0.5.4/Fase 4 descrita no `CONTINUITY.md` foi instalada
+O seletor de voz também está diretamente no painel `Hermes ao vivo`; selecionar uma voz ali
+salva e aplica a escolha. A aba Hermes de Configurações continua oferecendo o mesmo controle.
+
+Ao assumir, confirme primeiro se a entrega 0.5.5/Fase 4 descrita no `CONTINUITY.md` foi instalada
 e aceita usando `docs\FASE_4_CHECKLIST_ACEITE.md`. Se houver erro, leia o painel e
 `%LOCALAPPDATA%\VoxFlow\logs\voxflow.log`, corrija apenas a causa concreta e regenere a entrega.
 Não avance para a Fase 5 sem OK.

@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QPlainTextEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class HermesPanel(QWidget):
     toggle_requested = Signal()
+    voice_changed = Signal(str)
 
     def __init__(self, voice: str) -> None:
         super().__init__()
@@ -28,14 +37,29 @@ class HermesPanel(QWidget):
         layout.addWidget(self._state)
         layout.addWidget(QLabel("Você disse"))
         layout.addWidget(self._heard)
-        voice_name = {
-            "pt-BR-ThalitaMultilingualNeural": "Thalita",
-            "pt-BR-FranciscaNeural": "Francisca",
-            "pt-BR-AntonioNeural": "Antônio",
-        }.get(voice, voice)
-        layout.addWidget(QLabel(f"Hermes — resposta ao vivo · Voz: {voice_name}"))
+        voice_row = QHBoxLayout()
+        voice_row.addWidget(QLabel("Voz da Friday:"))
+        self._voice = QComboBox()
+        self._voice.setEditable(True)
+        self._voice.addItem("Thalita — feminina multilíngue", "pt-BR-ThalitaMultilingualNeural")
+        self._voice.addItem("Francisca — feminina", "pt-BR-FranciscaNeural")
+        self._voice.addItem("Antônio — masculina", "pt-BR-AntonioNeural")
+        voice_index = self._voice.findData(voice)
+        if voice_index >= 0:
+            self._voice.setCurrentIndex(voice_index)
+        else:
+            self._voice.setEditText(voice)
+        self._voice.currentIndexChanged.connect(self._emit_voice)
+        voice_row.addWidget(self._voice)
+        layout.addLayout(voice_row)
+        layout.addWidget(QLabel("Hermes — resposta ao vivo"))
         layout.addWidget(self._response)
         layout.addWidget(self._toggle)
+
+    def _emit_voice(self) -> None:
+        voice = str(self._voice.currentData() or self._voice.currentText()).strip()
+        if voice:
+            self.voice_changed.emit(voice)
 
     def set_state(self, state: str, message: str) -> None:
         labels = {

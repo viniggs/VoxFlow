@@ -264,6 +264,14 @@ class SettingsWindow(QWidget):
     def set_hermes_status(self, message: str) -> None:
         self._hermes_status.setText(message)
 
+    def set_hermes_voice(self, voice: str) -> None:
+        index = self._tts_voice.findData(voice)
+        if index >= 0:
+            self._tts_voice.setCurrentIndex(index)
+        else:
+            self._tts_voice.setEditText(voice)
+        self.save(show_dialog=False)
+
     def save(self, *, show_dialog: bool = True) -> None:
         try:
             snippets = self._json_mapping(self._snippets.toPlainText(), "snippets")

@@ -118,6 +118,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         lambda mode: hermes_panel.show() if mode == "hermes" else hermes_panel.hide()
     )
     hermes_panel.toggle_requested.connect(controller.toggle_hermes)
+    hermes_panel.voice_changed.connect(settings_window.set_hermes_voice)
     tray.settings_requested.connect(settings_window.show_tab)
     tray.history_requested.connect(history_window.show_and_refresh)
     tray.microphone_selected.connect(settings_window.set_microphone)
