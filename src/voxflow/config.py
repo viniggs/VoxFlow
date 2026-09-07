@@ -88,7 +88,7 @@ class InjectConfig(StrictModel):
 
 class TTSConfig(StrictModel):
     provider: Literal["edge", "openai", "sapi", "chatterbox"] = "edge"
-    voice: str = "pt-BR-FranciscaNeural"
+    voice: str = "pt-BR-ThalitaMultilingualNeural"
     rate: str = "+5%"
     chatterbox_path: str = r"C:\AI\Chatterbox-Friday"
 

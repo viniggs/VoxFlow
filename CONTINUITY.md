@@ -176,7 +176,7 @@ O prompt pronto para a próxima IA está em `PROMPT_INICIALIZACAO_PROXIMA_IA.md`
   half-duplex e botões de health/start/stop do gateway.
 - Rede, STT, gateway e TTS ficam fora da thread principal do Qt. Logs incluem
   `ttfb_hermes_ms` e `tts_first_audio_ms`, sem conteúdo da conversa.
-- A voz padrão provisória foi trocada para a feminina `pt-BR-FranciscaNeural`; a escolha e o
+- A voz padrão provisória foi trocada para a feminina `pt-BR-ThalitaMultilingualNeural`; a escolha e o
   tuning da voz definitiva permanecem para o fim do projeto, conforme pedido do usuário.
 - O endpointing usa um detector RMS leve nesta fase. `silero-vad` segue disponível como extra,
   mas não foi empacotado para evitar custo pesado sem evidência de necessidade na RTX 5070.
