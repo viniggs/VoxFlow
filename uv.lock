@@ -3952,7 +3952,7 @@ wheels = [
 
 [[package]]
 name = "voxflow"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "keyring" },
@@ -3983,6 +3983,9 @@ dev = [
     { name = "pytest-qt" },
     { name = "ruff" },
 ]
+local-stt = [
+    { name = "faster-whisper" },
+]
 providers = [
     { name = "edge-tts" },
     { name = "faster-whisper" },
@@ -3998,6 +4001,7 @@ vad = [
 [package.metadata]
 requires-dist = [
     { name = "edge-tts", marker = "extra == 'providers'" },
+    { name = "faster-whisper", marker = "extra == 'local-stt'" },
     { name = "faster-whisper", marker = "extra == 'providers'" },
     { name = "groq", marker = "extra == 'providers'" },
     { name = "httpx", extras = ["http2"], marker = "extra == 'desktop'" },
@@ -4024,7 +4028,7 @@ requires-dist = [
     { name = "silero-vad", marker = "extra == 'vad'" },
     { name = "sounddevice" },
 ]
-provides-extras = ["desktop", "providers", "vad", "dev", "build"]
+provides-extras = ["desktop", "providers", "local-stt", "vad", "dev", "build"]
 
 [[package]]
 name = "win32-setctime"

@@ -1,11 +1,14 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "0.1.0"
+  #define MyAppVersion "0.2.0"
 #endif
 #ifndef BuildRoot
   #define BuildRoot "..\\dist\\VoxFlow"
 #endif
+#ifndef MyAppPhase
+  #define MyAppPhase "0"
+#endif
 #ifndef OutputRoot
-  #define OutputRoot "..\\releases\\fase-0"
+  #define OutputRoot "..\\releases\\fase-" + MyAppPhase
 #endif
 
 #define MyAppName "VoxFlow"
@@ -20,7 +23,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
 OutputDir={#OutputRoot}
-OutputBaseFilename=VoxFlow-{#MyAppVersion}-fase-0-setup
+OutputBaseFilename=VoxFlow-{#MyAppVersion}-fase-{#MyAppPhase}-setup
 Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=lowest
@@ -37,6 +40,7 @@ Source: "{#BuildRoot}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 
 [Icons]
 Name: "{group}\VoxFlow"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\Encerrar VoxFlow"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--quit"
 Name: "{userdesktop}\VoxFlow"; Filename: "{app}\{#MyAppExeName}"; Tasks: autostart
 
 [Registry]
@@ -44,4 +48,3 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Executar VoxFlow"; Flags: nowait postinstall skipifsilent
-

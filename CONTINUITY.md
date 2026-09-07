@@ -1,8 +1,8 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-06  
-Versão: 0.1.0  
-Fase concluída no código: Fase 0
+Versão: 0.2.0  
+Fase concluída no código: Fase 1, aguardando aceite manual
 
 ## Objetivo
 
@@ -47,17 +47,33 @@ A implementação deve seguir, sem saltos, as fases da especificação em
 - PyInstaller onedir/noconsole e Inno Setup.
 - Script de release que produz ZIP do código e instalador separados.
 
+Aceite manual recebido em 2026-09-06: instalação sem elevação, diretório correto,
+diagnóstico e SteelSeries aprovados, e desinstalação removeu autostart. O reinício foi
+explicitamente dispensado pelo usuário e permanece não testado.
+
+## Fase 1 implementada
+
+- Hotkey global nativa `WH_KEYBOARD_LL` para `Ctrl+Numpad +`, com press/release e supressão do `+`.
+- Captura contínua 16 kHz mono int16 com pre-roll de 300 ms.
+- Cancelamento abaixo de 400 ms ou RMS mínimo.
+- Faster Whisper large-v3-turbo local, GPU float16 e fallback CPU int8.
+- Reuso seguro dos DLLs CUDA presentes nas instalações locais de TTS.
+- Injeção por clipboard com `SendInput` Ctrl+V, cinco tentativas e restauração após 150 ms.
+- State machine `IDLE → RECORDING → TRANSCRIBING → INJECTING → IDLE`.
+- STT e injeção executados em worker; loop Qt permanece livre.
+- Instância única e comando/atalho `--quit` para encerramento controlado.
+- Logs de `stt_ms`, `inject_ms` e `total_after_release_ms` sem registrar o conteúdo ditado.
+
 ## Próxima fase — somente após OK do usuário
 
-Fase 1: hotkey hold, captura de áudio, um provedor STT e injeção clipboard no app em foco,
-com aceite no Bloco de Notas e Chrome e latência medida. Como não há chave Groq/OpenAI
-configurada, a implementação deve usar o faster-whisper local já presente, salvo nova decisão do usuário.
+Fase 2: limpeza LLM, dicionário, snippets, regras por app, injeção Unicode e fallback
+para texto bruto. Não iniciar antes do aceite manual da Fase 1.
 
 ## Restrições
 
 - Nunca bloquear a thread principal do Qt.
 - Não armazenar credenciais em YAML, logs, ZIP ou repositório.
 - Não modificar a configuração do Hermes antes da Fase 4.
+- O fallback CPU da Fase 1 garante funcionamento, mas o empacotamento independente das DLLs CUDA continua previsto para a Fase 6.
 - Não implementar fases futuras antes do OK explícito.
 - Validar uma vez por entrega, proporcionalmente ao risco.
-

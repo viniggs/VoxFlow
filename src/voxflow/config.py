@@ -36,16 +36,35 @@ class AudioConfig(StrictModel):
     vad_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
     endpoint_silence_ms: int = Field(default=700, ge=100)
     preroll_ms: int = Field(default=300, ge=0)
+    minimum_recording_ms: int = Field(default=400, ge=100)
+    minimum_rms: float = Field(default=0.005, ge=0.0, le=1.0)
+
+
+def _default_whisper_cache() -> str:
+    return str(
+        Path.home()
+        / ".cache"
+        / "huggingface"
+        / "hub"
+        / "models--mobiuslabsgmbh--faster-whisper-large-v3-turbo"
+    )
+
+
+def _default_cuda_dll_dirs() -> list[str]:
+    return [
+        r"C:\AI\Chatterbox-Friday\.venv\Lib\site-packages\torch\lib",
+        r"C:\AI\Qwen3-TTS-Friday\.venv\Lib\site-packages\torch\lib",
+    ]
 
 
 class STTConfig(StrictModel):
     primary: Literal["groq", "openai", "local", "deepgram"] = "local"
     fallback: Literal["groq", "openai", "local", "deepgram"] | None = None
     local_model: str = "large-v3-turbo"
-    local_model_cache: str = (
-        r"C:\Users\vinig\.cache\huggingface\hub\models--mobiuslabsgmbh--"
-        "faster-whisper-large-v3-turbo"
-    )
+    local_model_cache: str = Field(default_factory=_default_whisper_cache)
+    local_device: Literal["cuda", "cpu"] = "cuda"
+    local_compute_type: str = "float16"
+    cuda_dll_dirs: list[str] = Field(default_factory=_default_cuda_dll_dirs)
 
 
 class CleanupConfig(StrictModel):
@@ -134,4 +153,3 @@ def save_config(config: AppConfig, paths: AppPaths | None = None) -> Path:
     finally:
         temporary.unlink(missing_ok=True)
     return resolved.config_file
-

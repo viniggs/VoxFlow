@@ -2,7 +2,8 @@ param(
     [ValidatePattern('^\d+\.\d+\.\d+$')]
     [string]$Version = '0.1.0',
     [ValidateRange(0, 7)]
-    [int]$Phase = 0
+    [int]$Phase = 0,
+    [switch]$SkipValidation
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,10 +34,12 @@ function Invoke-Checked {
     }
 }
 
-Invoke-Checked { uv sync --extra desktop --extra dev --extra build } 'Falha ao preparar o ambiente.'
-Invoke-Checked { uv run ruff check . } 'Ruff encontrou problemas.'
-Invoke-Checked { uv run pytest } 'Os testes falharam.'
-Invoke-Checked { uv run voxflow --check } 'O diagnóstico de configuração/microfone falhou.'
+Invoke-Checked { uv sync --extra desktop --extra local-stt --extra dev --extra build } 'Falha ao preparar o ambiente.'
+if (-not $SkipValidation) {
+    Invoke-Checked { uv run ruff check . } 'Ruff encontrou problemas.'
+    Invoke-Checked { uv run pytest } 'Os testes falharam.'
+    Invoke-Checked { uv run voxflow --check } 'O diagnóstico de configuração/microfone falhou.'
+}
 Invoke-Checked { uv run pyinstaller --clean --noconfirm (Join-Path $ProjectRoot 'packaging\voxflow.spec') } 'O PyInstaller falhou.'
 
 New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
@@ -57,7 +60,7 @@ if (-not (Test-Path -LiteralPath $InnoCompiler)) {
     throw 'Inno Setup 6 não encontrado. Instale-o antes de gerar o instalador.'
 }
 Invoke-Checked {
-    & $InnoCompiler "/DMyAppVersion=$Version" "/DBuildRoot=$(Join-Path $ProjectRoot 'dist\VoxFlow')" "/DOutputRoot=$ReleaseDir" (Join-Path $ProjectRoot 'packaging\setup.iss')
+    & $InnoCompiler "/DMyAppVersion=$Version" "/DMyAppPhase=$Phase" "/DBuildRoot=$(Join-Path $ProjectRoot 'dist\VoxFlow')" "/DOutputRoot=$ReleaseDir" (Join-Path $ProjectRoot 'packaging\setup.iss')
 } 'O Inno Setup falhou.'
 
 Write-Output "Código: $SourceZip"
