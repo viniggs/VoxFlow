@@ -2,7 +2,7 @@
 
 Atualizado em: 2026-09-06  
 Versão: 0.3.0  
-Fase concluída no código: Fase 2, aguardando aceite manual
+Fase concluída no código: Fase 2 com UI emergencial de diagnóstico, aguardando aceite manual
 
 ## Objetivo
 
@@ -84,6 +84,26 @@ injeção automática, corrigida na Fase 2 com fallback Unicode.
 - Detecção do aplicativo ativo e regras por executável para tom, limpeza, espaço e injeção.
 - Windows Terminal, PowerShell e CMD usam Unicode; clipboard cai para Unicode se falhar.
 - Logs incluem `cleanup_ms`, provider/fallback, `inject_ms` e latência total sem conteúdo.
+
+## UI emergencial adicionada após feedback de aceite
+
+O usuário informou que a build 0.3.0 não inseria texto nem mantinha conteúdo no clipboard e
+que era impossível testar sem UI. Os logs existentes não mostraram eventos da execução 0.3.0,
+embora o processo instalado estivesse ativo e o executável tivesse o mesmo hash da build.
+
+Para remover a caixa-preta, foi adicionada uma janela visível ao iniciar com:
+
+- estado ao vivo: inicializando, pronto, ouvindo, transcrevendo, limpando e inserindo;
+- transcrição bruta após soltar o atalho (o Whisper atual é batch, não streaming por palavra);
+- texto final, métricas, eventos e erros com abertura automática em falha;
+- botão para copiar o texto final e botão para abrir a pasta de logs;
+- ícone de bandeja com ações para reabrir a janela e encerrar o VoxFlow.
+
+`main.py` agora usa `QApplication` e mantém a interface disponível inclusive quando a
+inicialização do pipeline falha. A entrega precisa ser instalada e testada manualmente antes
+de considerar a Fase 2 aceita.
+
+O prompt pronto para a próxima IA está em `PROMPT_INICIALIZACAO_PROXIMA_IA.md`.
 
 ## Próxima fase — somente após OK do usuário
 

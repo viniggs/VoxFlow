@@ -48,26 +48,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = run_check(config, paths)
         print(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))
         return 0 if result.ok else 1
-    from PySide6.QtCore import QCoreApplication, QTimer
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication
 
     from voxflow.app import VoxFlowController
     from voxflow.single_instance import InstanceGuard
+    from voxflow.ui.status_window import StatusWindow, TrayController
 
     guard = InstanceGuard()
     if guard.already_running:
         logger.info("voxflow_already_running")
         guard.close()
         return 0
-    application = QCoreApplication([])
+    application = QApplication([])
+    application.setQuitOnLastWindowClosed(False)
     application.setApplicationName("VoxFlow")
     application.setApplicationVersion(__version__)
     controller = VoxFlowController(config)
+    window = StatusWindow(controller.signals, paths.log_dir)
+    tray = TrayController(application, window)
+    tray.quit_requested.connect(application.quit)
+    window.show()
     try:
         controller.start()
-    except Exception:
+    except Exception as exc:
         logger.exception("Falha ao iniciar o VoxFlow")
-        guard.close()
-        return 3
+        window.set_error(f"Falha ao iniciar: {type(exc).__name__}: {exc}")
     quit_timer = QTimer()
     quit_timer.setInterval(250)
     quit_timer.timeout.connect(

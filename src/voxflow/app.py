@@ -31,6 +31,10 @@ class ControllerSignals(QObject):
     hotkey_pressed = Signal()
     hotkey_released = Signal()
     job_finished = Signal(object)
+    status_changed = Signal(str)
+    transcript_changed = Signal(str, str)
+    error_changed = Signal(str)
+    metrics_changed = Signal(object)
 
 
 class VoxFlowController(QObject):
@@ -67,11 +71,16 @@ class VoxFlowController(QObject):
     def state(self) -> DictationState:
         return self._state
 
+    @property
+    def signals(self) -> ControllerSignals:
+        return self._signals
+
     def start(self) -> None:
         self._audio.open()
         self._hotkey.start()
         self._executor.submit(self._stt.warmup)
         logger.info("voxflow_ready phase=2 hotkey=ctrl+num_add")
+        self._signals.status_changed.emit("Pronto — segure Ctrl + Numpad + para ditar")
 
     def stop(self) -> None:
         self._hotkey.stop()
@@ -87,6 +96,7 @@ class VoxFlowController(QObject):
             return
         if self._audio.start_recording():
             self._state = DictationState.RECORDING
+            self._signals.status_changed.emit("Ouvindo… fale e solte o atalho ao terminar")
 
     @Slot()
     def _on_hotkey_released(self) -> None:
@@ -95,16 +105,20 @@ class VoxFlowController(QObject):
         clip = self._audio.stop_recording()
         if clip is None:
             self._state = DictationState.IDLE
+            self._signals.status_changed.emit("Captura cancelada")
             return
         if clip.held_ms < self._config.audio.minimum_recording_ms:
             logger.info("dictation_cancelled reason=too_short held_ms={:.2f}", clip.held_ms)
             self._state = DictationState.IDLE
+            self._signals.status_changed.emit("Toque curto ignorado")
             return
         if clip.rms < self._config.audio.minimum_rms:
             logger.info("dictation_cancelled reason=low_rms rms={:.6f}", clip.rms)
             self._state = DictationState.IDLE
+            self._signals.status_changed.emit("Silêncio detectado — nada foi inserido")
             return
         self._state = DictationState.TRANSCRIBING
+        self._signals.status_changed.emit("Transcrevendo áudio…")
         future = self._executor.submit(self._process_clip, clip, get_active_app())
         future.add_done_callback(self._complete_job)
 
@@ -117,12 +131,16 @@ class VoxFlowController(QObject):
         )
         if not transcript.text:
             raise RuntimeError("O STT não retornou texto.")
+        self._signals.transcript_changed.emit(transcript.text, "")
+        self._signals.status_changed.emit("Limpando o texto…")
         rule = resolve_app_rule(self._config, active_app)
         cleanup = self._cleaner.clean(transcript.text, active_app, rule)
         final_text = cleanup.text
         if rule.trailing_space and final_text and not final_text[-1].isspace():
             final_text += " "
+        self._signals.transcript_changed.emit(transcript.text, final_text)
         self._state = DictationState.INJECTING
+        self._signals.status_changed.emit("Inserindo no aplicativo…")
         inject_ms = self._injector.inject(final_text, strategy=rule.inject_strategy)
         total_ms = (time.perf_counter() - pipeline_started) * 1000
         logger.info(
@@ -152,4 +170,8 @@ class VoxFlowController(QObject):
     def _on_job_finished(self, result: object) -> None:
         if isinstance(result, Exception):
             logger.error("dictation_failed error_type={} error={!s}", type(result).__name__, result)
+            self._signals.error_changed.emit(f"{type(result).__name__}: {result}")
+        else:
+            self._signals.metrics_changed.emit(result)
+            self._signals.status_changed.emit("Pronto — texto processado e enviado")
         self._state = DictationState.IDLE
