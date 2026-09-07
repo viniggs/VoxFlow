@@ -12,7 +12,9 @@ def configure_logging(log_dir: Path, *, console: bool = False) -> Path:
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "voxflow.log"
     logger.remove()
-    if console:
+    # PyInstaller's windowed executable sets stderr to None. Commands such as
+    # --quit still request console logging, so only add the sink when it exists.
+    if console and sys.stderr is not None:
         logger.add(sys.stderr, level="INFO", enqueue=True)
     logger.add(
         log_file,
@@ -25,4 +27,3 @@ def configure_logging(log_dir: Path, *, console: bool = False) -> Path:
         diagnose=False,
     )
     return log_file
-

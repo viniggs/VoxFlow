@@ -67,6 +67,8 @@ explicitamente dispensado pelo usuário e permanece não testado.
   biblioteca compatível do Windows. O script de release falha se essas DLLs voltarem ao pacote.
 - O instalador também remove `icuuc.dll` e `icudt78.dll` deixadas pela primeira build
   da Fase 1, garantindo correção ao atualizar por cima sem desinstalação manual.
+- Logging de `--quit` ignora o sink de console quando o executável windowed não possui
+  `stderr`, evitando falha no atalho “Encerrar VoxFlow”.
 
 ## Próxima fase — somente após OK do usuário
 
