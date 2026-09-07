@@ -1,7 +1,7 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-07
-Versão: 0.4.0
+Versão: 0.4.1
 Fase concluída no código: Fase 3, aguardando aceite manual
 
 ## Objetivo
@@ -117,7 +117,7 @@ físico não tem tamanho plausível. O provider foi verificado contra o cache re
 
 Importante: o usuário esclareceu que “escrita em tempo real” significa somente o preview dentro
 da UI do VoxFlow, não texto sendo inserido no Notepad/Chrome enquanto fala. A injeção no aplicativo
-ativo deve ocorrer apenas após soltar o atalho. A versão 0.4.0 implementa esse preview por
+ativo deve ocorrer apenas após soltar o atalho. A versão 0.4.1 implementa esse preview por
 retranscrição periódica do áudio acumulado, em blocos de aproximadamente 900 ms, sem injetar
 nenhum parcial no aplicativo ativo.
 
@@ -146,14 +146,24 @@ nenhum parcial no aplicativo ativo.
 - Histórico SQLite local em `%LOCALAPPDATA%\VoxFlow\history.sqlite3`, com busca, cópia e limpeza.
 - Autostart gerenciável pela UI via HKCU e sons não bloqueantes para início/fim/erro/cancelamento.
 - `Esc` e o botão do overlay cancelam um ditado em gravação.
-- Testes automatizados: Ruff aprovado e 21 testes aprovados em 2026-09-07.
+- Testes automatizados: Ruff aprovado e 22 testes aprovados em 2026-09-07.
+
+### Correção 0.4.1 após primeiro aceite
+
+O usuário viu “Texto bruto · Muse e DeepSeek indisponíveis”. A chave estava presente; o
+executável instalado era idêntico à build e continha o certificado HTTPS. Uma chamada imediata
+com a mesma configuração respondeu pelo Muse, confirmando indisponibilidade transitória, não
+quebra de credencial ou endpoint. A fragilidade real era somente uma tentativa no DeepSeek e
+nenhum detalhe na UI. A 0.4.1 tenta o DeepSeek uma segunda vez em erros transitórios e mostra
+tipos seguros (`ReadTimeout`, conexão ou HTTP) no painel. Eventos visíveis também são enviados
+ao log para garantir diagnóstico mesmo se um componente não registrar sua própria etapa.
 
 O prompt pronto para a próxima IA está em `PROMPT_INICIALIZACAO_PROXIMA_IA.md`.
 
 ## Próxima fase — somente após OK do usuário
 
 Fase 4: cliente Hermes SSE, TTS por sentença, hands-free VAD, barge-in, half-duplex e painel
-de resposta. Não iniciar antes do aceite manual da versão 0.4.0/Fase 3.
+de resposta. Não iniciar antes do aceite manual da versão 0.4.1/Fase 3.
 
 ## Restrições
 

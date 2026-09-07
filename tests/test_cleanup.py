@@ -32,6 +32,12 @@ class FakeClient:
     def close(self) -> None: ...
 
 
+class FailingClient(FakeClient):
+    def post(self, url: str, **kwargs: object) -> FakeResponse:
+        self.urls.append(url)
+        raise httpx.ReadTimeout("timeout")
+
+
 def test_muse_timeout_falls_back_to_deepseek() -> None:
     client = FakeClient()
     cleaner = DictationCleaner(
@@ -64,3 +70,20 @@ def test_short_text_skips_remote_cleanup() -> None:
     assert result.provider == "local"
     assert result.reason == "short_text"
     assert client.urls == []
+
+
+def test_deepseek_retries_once_and_exposes_safe_failure_details() -> None:
+    client = FailingClient()
+    cleaner = DictationCleaner(
+        CleanupConfig(data_training_consent=True),
+        secrets=FakeSecrets(),  # type: ignore[arg-type]
+        client=client,  # type: ignore[arg-type]
+    )
+    rule = AppRule(True, "casual", "clipboard", True)
+
+    result = cleaner.clean("um texto bruto", ActiveApp(executable="notepad.exe"), rule)
+
+    assert result.provider == "raw"
+    assert result.reason == "providers_unavailable"
+    assert result.detail == "Muse: ReadTimeout; DeepSeek: ReadTimeout"
+    assert len(client.urls) == 3

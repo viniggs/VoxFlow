@@ -1,10 +1,10 @@
-# VoxFlow 0.4.0 — Checklist manual de aceite da Fase 3
+# VoxFlow 0.4.1 — Checklist manual de aceite da Fase 3
 
 Data: 2026-09-07
 
 ## Ditado, preview e inserção
 
-- [ ] Instalar `VoxFlow-0.4.0-fase-3-setup.exe` por cima da versão atual.
+- [ ] Instalar `VoxFlow-0.4.1-fase-3-setup.exe` por cima da versão atual.
 - [ ] Abrir o Bloco de Notas, segurar `Ctrl + Numpad +` e falar por pelo menos 4 segundos.
 - [ ] Confirmar que a janela e o overlay atualizam o preview em blocos enquanto você fala.
 - [ ] Confirmar que o preview aparece somente no VoxFlow e não escreve parcialmente no Bloco de Notas.

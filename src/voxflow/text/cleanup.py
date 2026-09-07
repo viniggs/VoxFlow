@@ -27,6 +27,7 @@ class CleanupResult:
     provider: str
     fallback_used: bool
     reason: str = ""
+    detail: str = ""
 
 
 class DictationCleaner:
@@ -60,17 +61,35 @@ class DictationCleaner:
         models = [self._config.fallback_model]
         if self._config.data_training_consent:
             models.insert(0, self._config.model)
+        failures: list[str] = []
         for index, model in enumerate(models):
-            try:
-                cleaned = self._request(model, safe_text, app, rule, api_key)
-                reason = "provider_fallback" if index > 0 else ""
-                return self._result(cleaned, started, model, index > 0, reason)
-            except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
-                logger.warning(
-                    "cleanup_provider_failed model={} error_type={}", model, type(exc).__name__
-                )
+            attempts = 2 if model == self._config.fallback_model else 1
+            for attempt in range(1, attempts + 1):
+                try:
+                    cleaned = self._request(model, safe_text, app, rule, api_key)
+                    reason = "provider_fallback" if index > 0 else ""
+                    return self._result(cleaned, started, model, index > 0, reason)
+                except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+                    failure = self._failure_label(model, exc)
+                    logger.warning(
+                        "cleanup_provider_failed model={} attempt={} error={}",
+                        model,
+                        attempt,
+                        failure,
+                    )
+                    if attempt == attempts or not self._is_retryable(exc):
+                        failures.append(failure)
+                        break
+                    time.sleep(0.15)
         logger.warning("cleanup_raw_fallback reason=providers_unavailable")
-        return self._result(safe_text, started, "raw", True, "providers_unavailable")
+        return self._result(
+            safe_text,
+            started,
+            "raw",
+            True,
+            "providers_unavailable",
+            "; ".join(failures),
+        )
 
     def _request(
         self,
@@ -82,7 +101,7 @@ class DictationCleaner:
     ) -> str:
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "User-Agent": "VoxFlow/0.4.0 Windows dictation",
+            "User-Agent": "VoxFlow/0.4.1 Windows dictation",
             "x-opencode-session": self._session_id,
         }
         prompt = self._system_prompt(app, rule)
@@ -164,12 +183,32 @@ class DictationCleaner:
         return result
 
     @staticmethod
+    def _is_retryable(exc: Exception) -> bool:
+        if isinstance(exc, (httpx.TimeoutException, httpx.NetworkError)):
+            return True
+        if isinstance(exc, httpx.HTTPStatusError):
+            status = exc.response.status_code
+            return status == 429 or status >= 500
+        return False
+
+    @staticmethod
+    def _failure_label(model: str, exc: Exception) -> str:
+        model_label = {
+            "muse-spark-1.3-contributor": "Muse",
+            "deepseek-v4-flash": "DeepSeek",
+        }.get(model, model)
+        if isinstance(exc, httpx.HTTPStatusError):
+            return f"{model_label}: HTTP {exc.response.status_code}"
+        return f"{model_label}: {type(exc).__name__}"
+
+    @staticmethod
     def _result(
         text: str,
         started: float,
         provider: str,
         fallback: bool,
         reason: str = "",
+        detail: str = "",
     ) -> CleanupResult:
         return CleanupResult(
             text=text,
@@ -177,4 +216,5 @@ class DictationCleaner:
             provider=provider,
             fallback_used=fallback,
             reason=reason,
+            detail=detail,
         )

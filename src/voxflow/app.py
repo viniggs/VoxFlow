@@ -280,6 +280,7 @@ class VoxFlowController(QObject):
                 "changed": changed,
                 "cleanup_ms": cleanup.cleanup_ms,
                 "reason": cleanup.reason,
+                "detail": cleanup.detail,
             }
         )
         if rule.trailing_space and final_text and not final_text[-1].isspace():

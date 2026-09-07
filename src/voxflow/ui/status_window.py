@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+from loguru import logger
 from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
@@ -106,6 +107,7 @@ class StatusWindow(QWidget):
         fallback = bool(details.get("fallback", False))
         changed = bool(details.get("changed", False))
         reason = str(details.get("reason", ""))
+        detail = str(details.get("detail", ""))
         labels = {
             "muse-spark-1.3-contributor": "Muse Spark 1.3 Contributor",
             "deepseek-v4-flash": "DeepSeek V4 Flash",
@@ -122,7 +124,8 @@ class StatusWindow(QWidget):
         }
         route = reason_labels.get(reason, "fallback" if fallback else "principal")
         effect = "alterou o texto" if changed else "não precisou alterar o texto"
-        self._cleanup_status.setText(f"{name} · {route} · {effect}")
+        suffix = f" · {detail}" if detail else ""
+        self._cleanup_status.setText(f"{name} · {route} · {effect}{suffix}")
         self._event(f"Tratamento: {name} ({route}; {effect})")
 
     def set_error(self, message: str) -> None:
@@ -139,6 +142,7 @@ class StatusWindow(QWidget):
     def _event(self, message: str) -> None:
         timestamp = datetime.now().strftime("%H:%M:%S")
         self._events.append(f"[{timestamp}] {message}")
+        logger.info("ui_event message={!r}", message)
 
     def _copy_final(self) -> None:
         QApplication.clipboard().setText(self._final.toPlainText())
