@@ -1,4 +1,4 @@
-"""Phase 1 orchestrator and dictation state machine."""
+"""Phase 2 orchestrator and dictation state machine."""
 
 from __future__ import annotations
 
@@ -13,7 +13,10 @@ from PySide6.QtCore import QObject, Qt, Signal, Slot
 from voxflow.audio.capture import AudioCapture, AudioClip
 from voxflow.config import AppConfig
 from voxflow.hotkeys import NativeHoldHotkey
+from voxflow.secrets import SecretStore
 from voxflow.stt.faster_whisper_local import FasterWhisperLocalProvider
+from voxflow.text.cleanup import DictationCleaner
+from voxflow.text.context import ActiveApp, get_active_app, resolve_app_rule
 from voxflow.text.inject import ClipboardInjector
 
 
@@ -53,6 +56,7 @@ class VoxFlowController(QObject):
             cuda_dll_dirs=config.stt.cuda_dll_dirs,
         )
         self._injector = ClipboardInjector(restore_clipboard=config.inject.restore_clipboard)
+        self._cleaner = DictationCleaner(config.cleanup, secrets=SecretStore())
         self._hotkey = NativeHoldHotkey(
             self._signals.hotkey_pressed.emit,
             self._signals.hotkey_released.emit,
@@ -67,12 +71,13 @@ class VoxFlowController(QObject):
         self._audio.open()
         self._hotkey.start()
         self._executor.submit(self._stt.warmup)
-        logger.info("voxflow_ready phase=1 hotkey=ctrl+num_add")
+        logger.info("voxflow_ready phase=2 hotkey=ctrl+num_add")
 
     def stop(self) -> None:
         self._hotkey.stop()
         self._audio.close()
         self._executor.shutdown(wait=True, cancel_futures=True)
+        self._cleaner.close()
         logger.info("voxflow_stopped")
 
     @Slot()
@@ -100,10 +105,10 @@ class VoxFlowController(QObject):
             self._state = DictationState.IDLE
             return
         self._state = DictationState.TRANSCRIBING
-        future = self._executor.submit(self._process_clip, clip)
+        future = self._executor.submit(self._process_clip, clip, get_active_app())
         future.add_done_callback(self._complete_job)
 
-    def _process_clip(self, clip: AudioClip) -> dict[str, Any]:
+    def _process_clip(self, clip: AudioClip, active_app: ActiveApp) -> dict[str, Any]:
         pipeline_started = time.perf_counter()
         transcript = self._stt.transcribe(
             clip.pcm16,
@@ -112,17 +117,27 @@ class VoxFlowController(QObject):
         )
         if not transcript.text:
             raise RuntimeError("O STT não retornou texto.")
+        rule = resolve_app_rule(self._config, active_app)
+        cleanup = self._cleaner.clean(transcript.text, active_app, rule)
+        final_text = cleanup.text
+        if rule.trailing_space and final_text and not final_text[-1].isspace():
+            final_text += " "
         self._state = DictationState.INJECTING
-        inject_ms = self._injector.inject(transcript.text)
+        inject_ms = self._injector.inject(final_text, strategy=rule.inject_strategy)
         total_ms = (time.perf_counter() - pipeline_started) * 1000
         logger.info(
-            "dictation_completed stt_ms={:.2f} inject_ms={:.2f} total_after_release_ms={:.2f}",
+            "dictation_completed stt_ms={:.2f} cleanup_ms={:.2f} inject_ms={:.2f} "
+            "total_after_release_ms={:.2f} cleanup_provider={} cleanup_fallback={}",
             transcript.stt_ms,
+            cleanup.cleanup_ms,
             inject_ms,
             total_ms,
+            cleanup.provider,
+            cleanup.fallback_used,
         )
         return {
             "stt_ms": transcript.stt_ms,
+            "cleanup_ms": cleanup.cleanup_ms,
             "inject_ms": inject_ms,
             "total_ms": total_ms,
         }

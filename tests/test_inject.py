@@ -41,3 +41,19 @@ def test_clipboard_injection_restores_previous_text() -> None:
     assert pasted == ["texto novo"]
     assert clipboard.text == "anterior"
 
+
+def test_clipboard_failure_falls_back_to_unicode() -> None:
+    clipboard = FakeClipboard()
+    typed: list[str] = []
+    injector = ClipboardInjector(
+        restore_clipboard=True,
+        clipboard=clipboard,
+        send_paste=lambda: (_ for _ in ()).throw(OSError("blocked")),
+        send_unicode=typed.append,
+        sleeper=lambda _: None,
+    )
+
+    injector.inject("Olá", strategy="clipboard")
+
+    assert typed == ["Olá"]
+    assert clipboard.text == "anterior"

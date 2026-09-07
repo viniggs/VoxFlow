@@ -4,8 +4,8 @@ VoxFlow será um aplicativo Windows de ditado universal e estudo por voz integra
 
 ## Estado atual
 
-Fase 1: ditado universal local com atalho global `Ctrl` + `+` do teclado numérico,
-captura contínua com pré-roll, transcrição por `faster-whisper` e colagem automática.
+Fase 2: ditado universal com limpeza OpenCode GO, comandos falados, snippets,
+regras por aplicativo, injeção Unicode e fallback seguro para o texto bruto.
 
 ## Desenvolvimento
 

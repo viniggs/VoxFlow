@@ -1,8 +1,8 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-06  
-Versão: 0.2.0  
-Fase concluída no código: Fase 1, aguardando aceite manual
+Versão: 0.3.0  
+Fase concluída no código: Fase 2, aguardando aceite manual
 
 ## Objetivo
 
@@ -70,10 +70,25 @@ explicitamente dispensado pelo usuário e permanece não testado.
 - Logging de `--quit` ignora o sink de console quando o executável windowed não possui
   `stderr`, evitando falha no atalho “Encerrar VoxFlow”.
 
+Aceite manual recebido em 2026-09-06. Ditado/STT e velocidade aprovados. O usuário
+identificou que precisava pressionar `Ctrl+V`; ausência de `inject_ms` confirmou falha da
+injeção automática, corrigida na Fase 2 com fallback Unicode.
+
+## Fase 2 implementada
+
+- Limpeza via OpenCode GO: Muse Spark 1.3 Contributor com consentimento e fallback por
+  timeout/erro para DeepSeek V4 Flash; falha total preserva o texto bruto.
+- Importação segura da chave já conectada no OpenCode para o Windows Credential Manager.
+- Comandos locais “nova linha”, “novo parágrafo”, pontuação, “apaga isso” e “esquece isso”.
+- Dicionário e snippets enviados ao limpador; snippets também expandem sem rede.
+- Detecção do aplicativo ativo e regras por executável para tom, limpeza, espaço e injeção.
+- Windows Terminal, PowerShell e CMD usam Unicode; clipboard cai para Unicode se falhar.
+- Logs incluem `cleanup_ms`, provider/fallback, `inject_ms` e latência total sem conteúdo.
+
 ## Próxima fase — somente após OK do usuário
 
-Fase 2: limpeza LLM, dicionário, snippets, regras por app, injeção Unicode e fallback
-para texto bruto. Não iniciar antes do aceite manual da Fase 1.
+Fase 3: tray, overlay, settings, histórico SQLite, autostart e sons. Não iniciar antes
+do aceite manual da Fase 2.
 
 ## Restrições
 
