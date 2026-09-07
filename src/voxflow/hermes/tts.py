@@ -15,6 +15,7 @@ from pathlib import Path
 from loguru import logger
 
 _SENTENCE_END = re.compile(r"(?<=[.!?…])(?:\s+|$)")
+_MIN_SENTENCE_CHARS = 12
 AudioItem = tuple[int, Path, int]
 
 
@@ -35,7 +36,7 @@ class SentenceBuffer:
             if not cleaned:
                 continue
             combined = f"{self._spoken_pending} {cleaned}".strip()
-            if len(combined) >= 40:
+            if len(combined) >= _MIN_SENTENCE_CHARS:
                 ready.append(combined)
                 self._spoken_pending = ""
             else:
@@ -91,6 +92,7 @@ class EdgeSentenceSpeaker:
         )
         self._synth_thread.start()
         self._play_thread.start()
+        logger.info("tts_speaker_ready provider=edge voice={!r} rate={!r}", voice, rate)
 
     def begin_response(self) -> None:
         with self._lock:

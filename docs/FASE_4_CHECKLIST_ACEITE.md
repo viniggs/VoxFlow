@@ -1,10 +1,10 @@
-# VoxFlow 0.5.2 — Checklist manual de aceite da Fase 4
+# VoxFlow 0.5.3 — Checklist manual de aceite da Fase 4
 
 Data: 2026-09-07
 
 ## Instalação e conexão
 
-- [ ] Instalar `VoxFlow-0.5.2-fase-4-setup.exe` por cima da versão atual.
+- [ ] Instalar `VoxFlow-0.5.3-fase-4-setup.exe` por cima da versão atual.
 - [ ] Abrir Configurações → Hermes e clicar em “Testar conexão”.
 - [ ] Se estiver parado, clicar em “Iniciar Hermes” e testar novamente.
 - [ ] Confirmar que aparece “Hermes conectado”.

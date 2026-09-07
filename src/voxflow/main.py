@@ -88,7 +88,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     overlay = DictationOverlay()
     history_window = HistoryWindow(history_store)
     settings_window = SettingsWindow(config, paths)
-    hermes_panel = HermesPanel()
+    hermes_panel = HermesPanel(config.hermes.tts.voice)
     tray = TrayController(application, window, config.audio.input_device)
     controller.signals.dictation_started.connect(window.begin_dictation)
     controller.signals.dictation_started.connect(overlay.begin)

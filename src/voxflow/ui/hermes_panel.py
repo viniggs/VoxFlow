@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, 
 class HermesPanel(QWidget):
     toggle_requested = Signal()
 
-    def __init__(self) -> None:
+    def __init__(self, voice: str) -> None:
         super().__init__()
         self.setWindowTitle("VoxFlow — Hermes ao vivo")
         self.resize(620, 540)
@@ -28,7 +28,12 @@ class HermesPanel(QWidget):
         layout.addWidget(self._state)
         layout.addWidget(QLabel("Você disse"))
         layout.addWidget(self._heard)
-        layout.addWidget(QLabel("Hermes — resposta ao vivo"))
+        voice_name = {
+            "pt-BR-ThalitaMultilingualNeural": "Thalita",
+            "pt-BR-FranciscaNeural": "Francisca",
+            "pt-BR-AntonioNeural": "Antônio",
+        }.get(voice, voice)
+        layout.addWidget(QLabel(f"Hermes — resposta ao vivo · Voz: {voice_name}"))
         layout.addWidget(self._response)
         layout.addWidget(self._toggle)
 

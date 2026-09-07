@@ -1,7 +1,7 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-07
-Versão: 0.5.2
+Versão: 0.5.3
 Fase concluída no código: Fase 4, aguardando aceite manual
 
 ## Objetivo
@@ -182,7 +182,7 @@ O prompt pronto para a próxima IA está em `PROMPT_INICIALIZACAO_PROXIMA_IA.md`
   mas não foi empacotado para evitar custo pesado sem evidência de necessidade na RTX 5070.
 - Validação automatizada final em 2026-09-07: Ruff aprovado e 26 testes aprovados.
 - O executável empacotado respondeu com código 0 ao diagnóstico `--check`.
-- Entrega: `releases\fase-4\VoxFlow-0.5.2-fase-4-setup.exe`, ZIP de código no mesmo
+- Entrega: `releases\fase-4\VoxFlow-0.5.3-fase-4-setup.exe`, ZIP de código no mesmo
   diretório e checklist em `docs\FASE_4_CHECKLIST_ACEITE.md`.
 
 ### Correção 0.5.1 após primeiro teste
@@ -199,6 +199,20 @@ O Edge TTS sintetizava e reproduzia cada frase sequencialmente, causando uma pau
 cada ponto final. A síntese e o playback agora usam workers e filas separados: enquanto uma
 frase toca, as próximas já são geradas. A ordem, o descarte no barge-in e a sinalização de fim
 foram preservados. O log inclui `tts_gap_ms` para medir o intervalo real entre frases.
+
+### Correção 0.5.3 — início da resposta
+
+O histórico contínuo `voxflow:estudo` foi preservado por pedido explícito do usuário. Para
+reduzir o tempo até a primeira voz, uma sentença completa agora é liberada ao TTS a partir de
+12 caracteres, em vez de aguardar aproximadamente 40. Interjeições muito curtas continuam
+agrupadas para evitar áudio fragmentado.
+
+O instalador agora encerra graciosamente qualquer instância antiga antes de substituir os
+arquivos. Antes disso, o pós-instalação podia abrir a nova versão, encontrar o mutex da versão
+anterior e sair, deixando voz e código antigos residentes até um encerramento manual. O painel
+mostra o nome da voz realmente carregada e o log registra `tts_speaker_ready` com a voz ativa.
+As configurações oferecem um dropdown editável com Thalita e Francisca (femininas) e Antônio
+(masculina); a troca é aplicada após reiniciar o VoxFlow.
 
 ## Próxima fase — somente após OK do usuário
 

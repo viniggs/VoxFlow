@@ -16,10 +16,17 @@ def test_sentence_buffer_combines_short_sentences_and_flushes_tail() -> None:
     buffer = SentenceBuffer()
 
     assert buffer.add("Oi. Tudo bem? Esta explicação já possui tamanho suficiente. ") == [
-        "Oi. Tudo bem? Esta explicação já possui tamanho suficiente."
+        "Oi. Tudo bem?",
+        "Esta explicação já possui tamanho suficiente.",
     ]
     assert buffer.add("Agora vem uma cauda") == []
     assert buffer.flush() == "Agora vem uma cauda"
+
+
+def test_sentence_buffer_releases_complete_short_answer_early() -> None:
+    buffer = SentenceBuffer()
+
+    assert buffer.add("Tô sim, ouvindo! ") == ["Tô sim, ouvindo!"]
 
 
 def test_spoken_text_removes_markdown_without_losing_link_label() -> None:

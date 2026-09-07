@@ -169,7 +169,16 @@ class SettingsWindow(QWidget):
         self._tts_provider = QComboBox()
         self._tts_provider.addItems(["edge", "openai", "sapi", "chatterbox"])
         self._tts_provider.setCurrentText(self._config.hermes.tts.provider)
-        self._tts_voice = QLineEdit(self._config.hermes.tts.voice)
+        self._tts_voice = QComboBox()
+        self._tts_voice.setEditable(True)
+        self._tts_voice.addItem("Thalita — feminina multilíngue", "pt-BR-ThalitaMultilingualNeural")
+        self._tts_voice.addItem("Francisca — feminina", "pt-BR-FranciscaNeural")
+        self._tts_voice.addItem("Antônio — masculina", "pt-BR-AntonioNeural")
+        voice_index = self._tts_voice.findData(self._config.hermes.tts.voice)
+        if voice_index >= 0:
+            self._tts_voice.setCurrentIndex(voice_index)
+        else:
+            self._tts_voice.setEditText(self._config.hermes.tts.voice)
         self._tts_rate = QLineEdit(self._config.hermes.tts.rate)
         self._chatterbox_path = QLineEdit(self._config.hermes.tts.chatterbox_path)
         self._hermes_instructions = self._editor(self._config.hermes.instructions, 105)
@@ -328,7 +337,9 @@ class SettingsWindow(QWidget):
         tts = self._config.hermes.tts.model_copy(
             update={
                 "provider": self._tts_provider.currentText(),
-                "voice": self._tts_voice.text().strip(),
+                "voice": str(
+                    self._tts_voice.currentData() or self._tts_voice.currentText()
+                ).strip(),
                 "rate": self._tts_rate.text().strip(),
                 "chatterbox_path": self._chatterbox_path.text().strip(),
             }
