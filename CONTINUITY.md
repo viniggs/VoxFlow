@@ -249,6 +249,11 @@ resumo/revisão ao encerrar. Não iniciar antes do aceite manual da versão 0.7.
 - O fallback CPU da Fase 1 garante funcionamento, mas o empacotamento independente das DLLs CUDA continua previsto para a Fase 6.
 - Não implementar fases futuras antes do OK explícito.
 - Validar uma vez por entrega, proporcionalmente ao risco.
+- Cada versão entregue mora na própria pasta, dentro da pasta da sua fase:
+  `releases/fase-<fase>/<versao>/`. Uma fase acumula correções — só a Fase 4
+  entregou nove versões — e uma pasta plana deixa de mostrar qual ZIP pertence a
+  qual instalador. Logs de instalação e notas daquela versão vão junto, na mesma
+  pasta. O `scripts/build-release.ps1` já grava assim.
 
 
 ## UI Friday — malha de pérolas e raios GPU (2026-09-07)

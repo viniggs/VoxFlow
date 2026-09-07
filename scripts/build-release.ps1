@@ -9,7 +9,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$ReleaseDir = Join-Path $ProjectRoot "releases\fase-$Phase"
+# Every release gets its own folder inside its phase. A phase accumulates fixes —
+# phase 4 alone shipped nine versions — and a flat folder stops making it obvious
+# which zip belongs with which installer.
+$ReleaseDir = Join-Path $ProjectRoot "releases\fase-$Phase\$Version"
 $SourceZip = Join-Path $ReleaseDir "VoxFlow-$Version-fase-$Phase-source.zip"
 $TempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
 $StagingDir = Join-Path $TempRoot "VoxFlow-source-$Version-fase-$Phase-$([guid]::NewGuid())"

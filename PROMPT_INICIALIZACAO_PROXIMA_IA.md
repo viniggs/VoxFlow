@@ -90,3 +90,11 @@ interface animando no mesmo processo) inocentou os dois.
 
 Não repita a suposição de que o histórico inchado vinha do corpo enviado: ele mede
 585 bytes. O acúmulo era server-side, na cadeia `conversation` do `/v1/responses`.
+
+## Onde as entregas ficam
+
+`releases/fase-<fase>/<versao>/` — cada versão na própria pasta, com o instalador, o ZIP
+do código e qualquer log ou nota daquela entrega. Não largue arquivos soltos na pasta da
+fase: uma fase acumula correções e a pasta vira um monte onde não se distingue qual ZIP
+acompanha qual instalador. O `scripts/build-release.ps1` já grava no lugar certo; ele
+aceita fase fracionada (`-Phase 4.5`).
