@@ -94,7 +94,8 @@ embora o processo instalado estivesse ativo e o executável tivesse o mesmo hash
 Para remover a caixa-preta, foi adicionada uma janela visível ao iniciar com:
 
 - estado ao vivo: inicializando, pronto, ouvindo, transcrevendo, limpando e inserindo;
-- transcrição bruta após soltar o atalho (o Whisper atual é batch, não streaming por palavra);
+- a UI deve mostrar um preview de transcrição atualizado enquanto o atalho está pressionado;
+  isso é separado da injeção, que só acontece depois que o atalho é solto;
 - texto final, métricas, eventos e erros com abertura automática em falha;
 - botão para copiar o texto final e botão para abrir a pasta de logs;
 - ícone de bandeja com ações para reabrir a janela e encerrar o VoxFlow.
@@ -109,9 +110,11 @@ montagem no executável instalado. O provider agora materializa o snapshot uma �
 `%LOCALAPPDATA%\VoxFlow\models\large-v3-turbo` usando hardlinks para os blobs físicos (cópia
 somente como fallback), eliminando reparse points sem duplicar normalmente o modelo de 1,5 GB.
 
-Importante: a escrita palavra por palavra enquanto o usuário fala AINDA NÃO EXISTE. O STT atual
-é batch e só produz texto após soltar o atalho. A próxima IA deve implementar streaming/parciais
-visíveis se esse requisito do usuário permanecer prioritário; não afirmar que já está pronto.
+Importante: o usuário esclareceu que “escrita em tempo real” significa somente o preview dentro
+da UI do VoxFlow, não texto sendo inserido no Notepad/Chrome enquanto fala. A injeção no aplicativo
+ativo deve ocorrer apenas após soltar o atalho. A build atual ainda é batch e só mostra a
+transcrição após soltar; a próxima IA deve implementar transcrição parcial/chunked na UI sem
+injetar parciais no aplicativo ativo. Não afirmar que isso já está pronto.
 
 O prompt pronto para a próxima IA está em `PROMPT_INICIALIZACAO_PROXIMA_IA.md`.
 

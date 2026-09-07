@@ -30,9 +30,12 @@ no Windows Credential Manager. O instalador é por usuário, sem certificado, e 
 onedir + Inno Setup.
 
 Contexto essencial: o usuário quer uma experiência visual verificável e não aceita mais uma
-caixa-preta. A janela de acompanhamento deve mostrar estado, transcrição bruta, texto final,
-métricas e erros; o tray precisa permitir reabrir e encerrar. Preserve essa visibilidade em todas
-as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco horas é crítico.
+caixa-preta. A janela de acompanhamento deve mostrar estado, preview da transcrição enquanto o
+atalho está pressionado, texto final, métricas e erros; o tray precisa permitir reabrir e
+encerrar. “Tempo real” aqui significa apenas o preview na UI: nunca injete parciais no Notepad,
+Chrome ou outro aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa
+visibilidade em todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco
+horas é crítico.
 
 Ao assumir, confirme primeiro se a entrega emergencial de UI descrita no `CONTINUITY.md` foi
 instalada e aceita. Se houver erro, leia o painel e `%LOCALAPPDATA%\VoxFlow\logs\voxflow.log`,

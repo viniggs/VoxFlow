@@ -6,7 +6,8 @@ Data: 2026-09-06
 
 - [ ] Instalar `VoxFlow-0.3.0-fase-2-setup.exe` por cima da versão atual.
 - [ ] Confirmar que a janela “VoxFlow — Acompanhamento” abre e mostra “Pronto”.
-- [ ] Segurar o atalho e acompanhar “Ouvindo”, “Transcrevendo”, “Limpando” e “Inserindo”.
+- [ ] Segurar o atalho e acompanhar “Ouvindo” e o preview de transcrição na UI.
+- [ ] Soltar o atalho e acompanhar “Transcrevendo”, “Limpando” e “Inserindo”.
 - [ ] Confirmar que a transcrição bruta, o texto final ou um erro visível aparecem na janela.
 - [ ] Abrir o Bloco de Notas, ditar e confirmar que o texto aparece sem pressionar `Ctrl+V`.
 - [ ] Confirmar que o clipboard textual anterior é restaurado.
