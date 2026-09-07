@@ -98,6 +98,9 @@ class HermesConfig(StrictModel):
     session_key: str = "voxflow:estudo"
     conversation_id: str = "voxflow:estudo"
     half_duplex: bool = False
+    #: Use ``/v1/runs`` (server-side session history, real cancellation) instead of
+    #: ``/v1/responses``. Kept switchable so the old path is one setting away.
+    use_runs_api: bool = True
     attach_screenshot_on_command: bool = True
     instructions: str = (
         "Você é Hermes, um tutor por voz socrático. Responda em português brasileiro, "

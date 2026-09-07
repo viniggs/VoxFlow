@@ -116,6 +116,11 @@ class VoxFlowController(QObject):
             max_workers=2,
             thread_name_prefix="voxflow-hermes",
         )
+        # Stopping, health and gateway control never queue behind a streaming turn.
+        self._hermes_control = ThreadPoolExecutor(
+            max_workers=2,
+            thread_name_prefix="voxflow-hermes-control",
+        )
         self._preview_timer = QTimer(self)
         self._preview_timer.setInterval(120)
         self._preview_timer.timeout.connect(self._preview_tick)
@@ -215,6 +220,7 @@ class VoxFlowController(QObject):
         self._audio.close()
         self._executor.shutdown(wait=True, cancel_futures=True)
         self._hermes_executor.shutdown(wait=False, cancel_futures=True)
+        self._hermes_control.shutdown(wait=False, cancel_futures=True)
         self._cleaner.close()
         logger.info("voxflow_stopped")
 
@@ -481,12 +487,12 @@ class VoxFlowController(QObject):
     @Slot(str)
     def request_hermes_action(self, action: str) -> None:
         if action == "health":
-            future = self._hermes_executor.submit(self._hermes_client.health)
+            future = self._hermes_control.submit(self._hermes_client.health)
         elif action == "start":
-            future = self._hermes_executor.submit(start_gateway, self._config.hermes.base_url)
+            future = self._hermes_control.submit(start_gateway, self._config.hermes.base_url)
         elif action == "stop":
             self._stop_hermes_mode()
-            future = self._hermes_executor.submit(stop_gateway)
+            future = self._hermes_control.submit(stop_gateway)
         else:
             return
         future.add_done_callback(lambda done, current=action: self._complete_gateway(current, done))
@@ -526,9 +532,20 @@ class VoxFlowController(QObject):
         self._hermes_timer.start()
         self._level_timer.start()
 
+    def _abandon_hermes_turn(self) -> None:
+        """Drop the turn in flight, and tell the gateway to drop it too.
+
+        The cancel flag is only read between SSE lines, so on its own it does nothing
+        while the gateway is silent — which is most of a slow turn. Stopping the run
+        server-side closes the stream and frees the worker immediately."""
+
+        self._hermes_cancel.set()
+        if self._config.hermes.use_runs_api:
+            self._hermes_control.submit(self._hermes_client.stop_active_run)
+
     def _stop_hermes_mode(self) -> None:
         self._hermes_generation += 1
-        self._hermes_cancel.set()
+        self._abandon_hermes_turn()
         self._speaker.interrupt()
         self._hermes_timer.stop()
         self._level_timer.stop()
@@ -552,7 +569,7 @@ class VoxFlowController(QObject):
             if self._barge_vad.feed_level(rms, 50) is VADEvent.SPEECH_STARTED:
                 logger.info("hermes_barge_in")
                 self._hermes_generation += 1
-                self._hermes_cancel.set()
+                self._abandon_hermes_turn()
                 self._speaker.interrupt()
                 self._vad.reset()
                 self._vad.feed_level(rms, 300)
@@ -603,8 +620,13 @@ class VoxFlowController(QObject):
         self._hermes_cancel = threading.Event()
         self._sentence_buffer = SentenceBuffer()
         self._speaker.begin_response()
+        stream = (
+            self._hermes_client.stream_run
+            if self._config.hermes.use_runs_api
+            else self._hermes_client.stream_response
+        )
         future = self._hermes_executor.submit(
-            self._hermes_client.stream_response,
+            stream,
             transcript.text,
             self._config.hermes.instructions,
             lambda delta: self._signals.hermes_stream_delta.emit(generation, delta),

@@ -52,6 +52,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     from PySide6.QtWidgets import QApplication
 
     from voxflow.app import VoxFlowController
+    from voxflow.hermes.reasoning import ReasoningStream, default_directory
     from voxflow.single_instance import InstanceGuard
     from voxflow.storage import HistoryStore
     from voxflow.ui.conversation import ConversationOverlay
@@ -80,6 +81,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     history_window = HistoryWindow(history_store)
     settings_window = SettingsWindow(config, paths)
     conversation = ConversationOverlay(config.hermes.tts.voice)
+    reasoning = ReasoningStream(default_directory(), config.hermes.conversation_id)
+    reasoning.block_started.connect(conversation.begin_thinking)
+    reasoning.delta.connect(conversation.append_thinking)
+    reasoning.start()
     tray = TrayController(application, window, config.audio.input_device)
     controller.signals.dictation_started.connect(window.begin_dictation)
     controller.signals.dictation_started.connect(overlay.begin)

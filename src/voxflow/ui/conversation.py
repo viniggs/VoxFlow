@@ -29,6 +29,8 @@ from voxflow.ui.theme import (
     HERMES_STATES,
     TEXT,
     TEXT_MUTED,
+    THOUGHT_BUBBLE,
+    THOUGHT_BUBBLE_BORDER,
     USER_BUBBLE,
     USER_BUBBLE_BORDER,
     VisualState,
@@ -72,8 +74,11 @@ class Bubble(QFrame):
         self._label.setWordWrap(True)
         self._label.setTextFormat(Qt.TextFormat.RichText)
         self._label.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        tone = TEXT_MUTED if author == "thought" else TEXT
+        size = 12 if author == "thought" else 14
         self._label.setStyleSheet(
-            f"color: {rgba(TEXT)}; font-size: 14px; line-height: 150%; background: transparent;"
+            f"color: {rgba(tone)}; font-size: {size}px; line-height: 150%;"
+            " background: transparent;"
         )
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 13, 18, 14)
@@ -163,8 +168,12 @@ class Bubble(QFrame):
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         radius = 17.0
         mine = self._author == "user"
-        fill = USER_BUBBLE if mine else AGENT_BUBBLE
-        border = USER_BUBBLE_BORDER if mine else AGENT_BUBBLE_BORDER
+        thinking = self._author == "thought"
+        if thinking:
+            fill, border = THOUGHT_BUBBLE, THOUGHT_BUBBLE_BORDER
+        else:
+            fill = USER_BUBBLE if mine else AGENT_BUBBLE
+            border = USER_BUBBLE_BORDER if mine else AGENT_BUBBLE_BORDER
         path = QPainterPath()
         path.addRoundedRect(rect, radius, radius)
         painter.setPen(Qt.PenStyle.NoPen)
@@ -176,7 +185,7 @@ class Bubble(QFrame):
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(path)
-        if not mine:
+        if not mine and not thinking:
             glow = QLinearGradient(rect.left(), rect.top(), rect.left(), rect.bottom())
             glow.setColorAt(0.0, with_alpha(self._accent, 30))
             glow.setColorAt(0.5, with_alpha(self._accent, 210))
@@ -237,6 +246,8 @@ class ConversationOverlay(QWidget):
         self._state = VisualState.IDLE
         self._user_bubble: Bubble | None = None
         self._agent_bubble: Bubble | None = None
+        self._thought_bubble: Bubble | None = None
+        self._thought_turn = ""
 
         self._stream = QWidget()
         self._stream_layout = QVBoxLayout(self._stream)
@@ -346,6 +357,25 @@ class ConversationOverlay(QWidget):
     def begin_turn(self) -> None:
         self._user_bubble = None
         self._agent_bubble = None
+        self._thought_bubble = None
+        self._thought_turn = ""
+
+    def begin_thinking(self, turn_id: str) -> None:
+        """A new block of reasoning started."""
+
+        if turn_id == self._thought_turn and self._thought_bubble is not None:
+            return
+        self._thought_turn = turn_id
+        self._thought_bubble = None
+
+    def append_thinking(self, turn_id: str, text: str) -> None:
+        """Stream reasoning into the current block."""
+
+        del turn_id
+        if self._thought_bubble is None:
+            self._thought_bubble = self._make_bubble("thought")
+        self._thought_bubble.append(text)
+        self._scroll_to_end()
 
     def set_heard(self, text: str) -> None:
         bubble = self._ensure_bubble("user")
@@ -378,6 +408,20 @@ class ConversationOverlay(QWidget):
         voice = str(self._voice.currentData() or "").strip()
         if voice:
             self.voice_changed.emit(voice)
+
+    def _make_bubble(self, author: str) -> Bubble:
+        """Add a bubble to the stream without caching it against an author."""
+
+        bubble = Bubble(author)
+        bubble.set_accent(palette_for(self._state).core)
+        alignment = (
+            Qt.AlignmentFlag.AlignRight
+            if author == "user"
+            else Qt.AlignmentFlag.AlignLeft
+        )
+        self._stream_layout.addWidget(bubble, 0, alignment)
+        self._trim()
+        return bubble
 
     def _ensure_bubble(self, author: str) -> Bubble:
         existing = self._user_bubble if author == "user" else self._agent_bubble

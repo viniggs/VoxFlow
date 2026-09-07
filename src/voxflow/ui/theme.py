@@ -36,6 +36,9 @@ USER_BUBBLE = QColor(34, 211, 238, 38)
 USER_BUBBLE_BORDER = QColor(34, 211, 238, 92)
 AGENT_BUBBLE = QColor(255, 255, 255, 16)
 AGENT_BUBBLE_BORDER = QColor(255, 255, 255, 28)
+#: Thinking is an aside, not the answer: barely there, and no accent edge.
+THOUGHT_BUBBLE = QColor(255, 255, 255, 8)
+THOUGHT_BUBBLE_BORDER = QColor(255, 255, 255, 16)
 
 
 class VisualState(enum.StrEnum):
