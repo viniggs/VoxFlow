@@ -48,6 +48,9 @@ _BUBBLE_MAX_WIDTH = int(_PANEL_WIDTH * 0.82)
 _BUBBLE_MIN_WIDTH = 96
 _BUBBLE_PADDING_X = 36
 _BUBBLE_PADDING_Y = 27
+#: How much of a thought is kept on screen. Reasoning runs to tens of thousands of
+#: characters; laying all of it out costs more than it is worth to a reader.
+_THOUGHT_MAX_CHARS = 2400
 _VOICES = (
     ("Thalita", "pt-BR-ThalitaMultilingualNeural"),
     ("Francisca", "pt-BR-FranciscaNeural"),
@@ -119,6 +122,10 @@ class Bubble(QFrame):
 
     def append(self, delta: str) -> None:
         self._plain += delta
+        if self._author == "thought" and len(self._plain) > _THOUGHT_MAX_CHARS:
+            self._plain = self._plain[-_THOUGHT_MAX_CHARS:]
+            self._highlight = None
+            self._cursor = 0
         self._render()
 
     def highlight_word(self, word: str) -> None:

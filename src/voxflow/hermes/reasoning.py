@@ -24,6 +24,11 @@ from PySide6.QtCore import QObject, QTimer, Signal
 STREAM_FILENAME = "stream.jsonl"
 
 _POLL_MS = 100
+#: Deltas are token-sized and arrive in the thousands. Handing each one to the
+#: interface separately makes it redraw the whole bubble per token, which is what
+#: left the thinking minutes behind the conversation. They are joined and released
+#: on this cadence instead: still live to the eye, a hundred times less work.
+_FLUSH_MS = 120
 #: Nothing useful can be that long, and it stops a corrupt file from being read into memory.
 _MAX_LINE_BYTES = 64 * 1024
 
@@ -44,9 +49,14 @@ class ReasoningStream(QObject):
         self._identity: tuple[int, int] | None = None
         self._pending = ""
         self._turn_id = ""
+        self._buffer: list[str] = []
+        self._buffer_turn = ""
         self._timer = QTimer(self)
         self._timer.setInterval(_POLL_MS)
         self._timer.timeout.connect(self._poll)
+        self._flush_timer = QTimer(self)
+        self._flush_timer.setInterval(_FLUSH_MS)
+        self._flush_timer.timeout.connect(self.flush)
 
     @property
     def path(self) -> Path:
@@ -60,6 +70,8 @@ class ReasoningStream(QObject):
         self._session_id = session_id
         self._pending = ""
         self._turn_id = ""
+        self._buffer.clear()
+        self._buffer_turn = ""
 
     def start(self) -> None:
         """Begin tailing from the end of the file: past turns are not replayed."""
@@ -68,9 +80,12 @@ class ReasoningStream(QObject):
         self._identity = self._file_identity()
         self._pending = ""
         self._timer.start()
+        self._flush_timer.start()
 
     def stop(self) -> None:
         self._timer.stop()
+        self._flush_timer.stop()
+        self.flush()
 
     def _size(self) -> int:
         try:
@@ -141,9 +156,20 @@ class ReasoningStream(QObject):
         if turn_id != self._turn_id:
             # A turn can think more than once — think, call a tool, think again — so each
             # block is announced separately instead of being glued into one wall of text.
+            self.flush()
             self._turn_id = turn_id
             self.block_started.emit(turn_id)
-        self.delta.emit(turn_id, piece)
+        self._buffer_turn = turn_id
+        self._buffer.append(piece)
+
+    def flush(self) -> None:
+        """Release everything buffered as one delta."""
+
+        if not self._buffer:
+            return
+        joined = "".join(self._buffer)
+        self._buffer.clear()
+        self.delta.emit(self._buffer_turn, joined)
 
 
 def default_directory() -> Path:

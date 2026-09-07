@@ -29,17 +29,37 @@ def collect(reader: ReasoningStream) -> tuple[list[str], list[tuple[str, str]]]:
 
 
 def append(reader: ReasoningStream, text: str) -> None:
+    """Write, read and release, driving deterministically instead of waiting on timers."""
+
     with reader.path.open("a", encoding="utf-8") as handle:
         handle.write(text)
-    reader._poll()  # noqa: SLF001 - drive the tail deterministically instead of waiting
+    reader._poll()  # noqa: SLF001
+    reader.flush()
 
 
-def test_reads_reasoning_deltas_in_order(stream: ReasoningStream) -> None:
+def test_deltas_of_one_block_are_released_joined(stream: ReasoningStream) -> None:
+    """Reasoning arrives as thousands of token-sized pieces.
+
+    Handing each one to the interface separately made it redraw the whole bubble per
+    token, and the thinking fell minutes behind the conversation.
+    """
+
     blocks, deltas = collect(stream)
     append(stream, line(delta="O gelo ") + line(delta="e um cristal."))
 
-    assert deltas == [("t1", "O gelo "), ("t1", "e um cristal.")]
+    assert deltas == [("t1", "O gelo e um cristal.")]
     assert blocks == ["t1"]
+
+
+def test_nothing_is_released_before_a_flush(stream: ReasoningStream) -> None:
+    _, deltas = collect(stream)
+    with stream.path.open("a", encoding="utf-8") as handle:
+        handle.write(line(delta="ainda no buffer"))
+    stream._poll()  # noqa: SLF001
+
+    assert deltas == []
+    stream.flush()
+    assert deltas == [("t1", "ainda no buffer")]
 
 
 def test_answer_deltas_are_ignored(stream: ReasoningStream) -> None:
@@ -65,6 +85,7 @@ def test_each_thinking_block_is_announced(stream: ReasoningStream) -> None:
     append(stream, line(turn_id="t1", delta="primeiro") + line(turn_id="t2", delta="segundo"))
 
     assert blocks == ["t1", "t2"]
+    # A block boundary forces a release, so one turn's text never joins the next.
     assert deltas == [("t1", "primeiro"), ("t2", "segundo")]
 
 
@@ -89,6 +110,7 @@ def test_rotation_does_not_replay_or_break(stream: ReasoningStream) -> None:
     append(stream, line(delta="depois"))
 
     assert deltas == [("t1", "antes"), ("t1", "depois")]
+    assert "".join(text for _, text in deltas) == "antesdepois"
 
 
 def test_truncation_in_place_is_survived(stream: ReasoningStream) -> None:
