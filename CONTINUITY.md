@@ -106,9 +106,12 @@ de considerar a Fase 2 aceita.
 
 Feedback de 2026-09-07: a UI funcionou, mas o STT falhou com `WinError 448` porque os arquivos
 do snapshot Hugging Face são links simbólicos e o Windows bloqueou a travessia do ponto de
-montagem no executável instalado. O provider agora materializa o snapshot uma única vez em
-`%LOCALAPPDATA%\VoxFlow\models\large-v3-turbo` usando hardlinks para os blobs físicos (cópia
-somente como fallback), eliminando reparse points sem duplicar normalmente o modelo de 1,5 GB.
+montagem no executável instalado. A primeira correção de materialização foi empacotada, mas não
+foi acionada: ela também dependia de `.exists()`, que falha nesse mesmo link. A correção atual
+seleciona o snapshot sem testar `model.bin` com `.exists()`, detecta o link com `os.path.islink`
+e materializa o snapshot em `%LOCALAPPDATA%\VoxFlow\models\large-v3-turbo`, usando hardlinks
+para os blobs físicos (cópia somente como fallback), eliminando reparse points sem duplicar
+normalmente o modelo de 1,5 GB. A build recompilada ainda precisa de aceite manual do usuário.
 
 Importante: o usuário esclareceu que “escrita em tempo real” significa somente o preview dentro
 da UI do VoxFlow, não texto sendo inserido no Notepad/Chrome enquanto fala. A injeção no aplicativo

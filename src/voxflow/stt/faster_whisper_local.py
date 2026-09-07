@@ -37,15 +37,21 @@ class FasterWhisperLocalProvider:
         self._dll_handles: list[Any] = []
 
     def _resolve_model_path(self) -> str:
-        if (self._model_cache / "model.bin").exists():
+        trusted_root = self._trusted_model_root()
+        trusted_model = trusted_root / "model.bin"
+        if trusted_model.is_file() and not os.path.islink(str(trusted_model)):
+            return str(trusted_root)
+
+        model_file = self._model_cache / "model.bin"
+        if os.path.isfile(str(model_file)) or os.path.islink(str(model_file)):
             return str(self._materialize_symlinks(self._model_cache))
         snapshots = self._model_cache / "snapshots"
-        if snapshots.exists():
+        if os.path.isdir(str(snapshots)):
             candidates = sorted(
                 (
                     item
                     for item in snapshots.iterdir()
-                    if item.is_dir() and (item / "model.bin").exists()
+                    if item.is_dir()
                 ),
                 key=lambda item: item.stat().st_mtime,
                 reverse=True,
@@ -54,27 +60,42 @@ class FasterWhisperLocalProvider:
                 return str(self._materialize_symlinks(candidates[0]))
         return self._model_name
 
-    def _materialize_symlinks(self, source_root: Path) -> Path:
-        if os.name != "nt" or not any(path.is_symlink() for path in source_root.rglob("*")):
-            return source_root
+    def _trusted_model_root(self) -> Path:
         local_root = Path(os.environ.get("LOCALAPPDATA", Path.home()))
-        destination_root = local_root / "VoxFlow" / "models" / self._model_name
-        for source in source_root.rglob("*"):
-            relative = source.relative_to(source_root)
-            destination = destination_root / relative
-            if source.is_dir():
-                destination.mkdir(parents=True, exist_ok=True)
-                continue
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            if destination.exists():
-                continue
-            physical_source = source
-            if source.is_symlink():
-                physical_source = Path(os.path.abspath(source.parent / os.readlink(source)))
-            try:
-                os.link(physical_source, destination)
-            except OSError:
-                shutil.copy2(physical_source, destination)
+        return local_root / "VoxFlow" / "models" / self._model_name
+
+    def _materialize_symlinks(self, source_root: Path) -> Path:
+        if os.name != "nt":
+            return source_root
+
+        destination_root = self._trusted_model_root()
+        destination_root.mkdir(parents=True, exist_ok=True)
+        for base, directories, files in os.walk(str(source_root), followlinks=False):
+            base_path = Path(base)
+            for directory in directories:
+                source_directory = base_path / directory
+                if os.path.islink(str(source_directory)):
+                    continue
+                (destination_root / source_directory.relative_to(source_root)).mkdir(
+                    parents=True,
+                    exist_ok=True,
+                )
+            for filename in files:
+                source = base_path / filename
+                destination = destination_root / source.relative_to(source_root)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                if destination.is_file() and not os.path.islink(str(destination)):
+                    continue
+                physical_source = source
+                if os.path.islink(str(source)):
+                    link_target = os.readlink(str(source))
+                    physical_source = Path(os.path.abspath(os.path.join(base, link_target)))
+                if not physical_source.is_file():
+                    raise OSError(f"arquivo do modelo não encontrado: {physical_source}")
+                try:
+                    os.link(str(physical_source), str(destination))
+                except OSError:
+                    shutil.copy2(str(physical_source), str(destination))
         logger.info("stt_model_materialized path={!r}", str(destination_root))
         return destination_root
 

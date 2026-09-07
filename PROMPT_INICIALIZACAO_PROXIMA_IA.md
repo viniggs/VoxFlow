@@ -37,6 +37,10 @@ Chrome ou outro aplicativo. A injeção final ocorre somente ao soltar o atalho.
 visibilidade em todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco
 horas é crítico.
 
+A última build apresentou `WinError 448` ao carregar o `model.bin` simbólico do cache Hugging
+Face. A correção mais recente materializa o snapshot em `%LOCALAPPDATA%\VoxFlow\models\` e
+precisa ser instalada/testada; não trate a Fase 2 como aceita até o ditado funcionar.
+
 Ao assumir, confirme primeiro se a entrega emergencial de UI descrita no `CONTINUITY.md` foi
 instalada e aceita. Se houver erro, leia o painel e `%LOCALAPPDATA%\VoxFlow\logs\voxflow.log`,
 corrija apenas a causa concreta e regenere a entrega. Não avance para a próxima fase sem OK.
