@@ -121,9 +121,15 @@ A Friday tem duas formas de ouvir, e elas coexistem de propósito:
 
 Se for mexer nisso, três armadilhas já pagas:
 
-- **A tecla não pode ser tomada para a sessão inteira.** Ela só é da Friday enquanto
-  ela está na tela (`NativeHoldHotkey.set_talk_armed`, dirigido por
-  `_set_hermes_state`). Fora disso o `+` tem que digitar.
+- **A tecla é da Friday durante a sessão inteira, e isso é intencional.** Foi um
+  pedido explícito do usuário: ele quer alcançá-la de dentro do editor de notas, sem
+  passar pelo F9. Uma primeira versão limitou a posse ao tempo em que ela estava na
+  tela e foi rejeitada. `set_talk_armed` é chamado uma vez em `start()`, a partir de
+  `hotkeys.hermes_push_to_talk`; esvaziar essa chave devolve a tecla ao Windows.
+- **Segurar a tecla com ela fechada tem que acordá-la e já gravar.** `toggle_hermes`
+  sobe o serviço de forma assíncrona, então o clipe fica em `_pending_talk_clip` e é
+  despachado quando `_on_gateway_result` confirma a subida. Sem isso, quem falasse
+  rápido perderia o turno para o tempo de startup.
 - **O key-up sempre precisa ser tratado**, mesmo se o modo foi desligado no meio da
   pressionada — senão a gravação fica aberta sem quem a feche.
 - **Os callbacks da TTS podem chegar atrasados.** `_on_tts_started` e `_on_tts_idle`

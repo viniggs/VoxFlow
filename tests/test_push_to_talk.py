@@ -43,14 +43,16 @@ def up(hotkey: NativeHoldHotkey, key: int) -> bool:
     return hotkey._handle_key(key, False, True)
 
 
-def test_bare_plus_still_types_when_friday_is_away() -> None:
+def test_the_key_can_be_given_back_to_windows() -> None:
+    # Emptying `hotkeys.hermes_push_to_talk` is the way out for anyone who wants the
+    # numpad + to keep typing. Unarmed, the hook must not touch the key at all.
     hotkey, recorder = build()
     assert down(hotkey, VK_ADD) is False
     assert up(hotkey, VK_ADD) is False
     assert recorder.events == []
 
 
-def test_bare_plus_talks_to_friday_once_armed() -> None:
+def test_bare_plus_talks_to_friday() -> None:
     hotkey, recorder = build()
     hotkey.set_talk_armed(True)
     assert down(hotkey, VK_ADD) is True

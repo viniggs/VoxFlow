@@ -192,3 +192,38 @@ Data: 2026-09-07
   Confirmar que a resposta **não é mais cortada em ~120 palavras**.
 - [ ] Fazer uma pergunta curta de sim/não e confirmar que ela continua respondendo
   curto — o tamanho deve seguir a pergunta, não um teto fixo.
+
+---
+
+# VoxFlow 0.7.4 — A tecla da Friday é global
+
+Data: 2026-09-07
+
+Substitui os itens de 0.7.3 sobre a posse da tecla, que testavam o contrário.
+
+## A tecla em qualquer lugar
+
+- [ ] Com a Friday **fechada**, estando no editor de notas, segurar o `+` do numpad e
+  falar. Confirmar que a janela dela **abre sozinha** e que o que foi falado desde o
+  começo chega — nada perdido no tempo de subida.
+- [ ] Repetir soltando a tecla **bem rápido depois de falar** (antes de ela terminar de
+  subir). Confirmar que o turno ainda chega, e não é descartado.
+- [ ] Confirmar que o `+` da tecla que divide com `=` continua digitando normalmente.
+- [ ] Confirmar que `Ctrl + Numpad +` continua ditando como sempre.
+
+## Com ela já aberta
+
+- [ ] Segurar o `+` de dentro de outro aplicativo e falar. Confirmar que chega.
+- [ ] Segurar o `+` e falar com **pausas longas para pensar**. Confirmar que o turno só
+  sai ao soltar, e não na primeira pausa.
+- [ ] Enquanto ela **fala**, segurar o `+`. Confirmar que ela para na hora e que o turno
+  novo entra ao soltar.
+
+## As duas regras
+
+- [ ] Toque rápido no `+` (menos de 1 s): nada enviado, "toque curto ignorado".
+- [ ] Segurar uns 4 s **em silêncio**: nada enviado, "não ouvi fala; nada foi enviado".
+- [ ] Segurar, falar e apertar `Esc` sem soltar: gravação descartada e nenhum `+` solto
+  na janela ativa ao soltar a tecla.
+- [ ] Ditar com `Ctrl + Numpad +` e, **enquanto a transcrição roda**, segurar o `+`.
+  Confirmar que ele é recusado com aviso, sem embaralhar os dois caminhos.

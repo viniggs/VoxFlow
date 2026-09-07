@@ -15,8 +15,10 @@ encerrar cada turno. O painel mostra o que ela está pensando enquanto pensa, e 
 resposta conforme ela chega. Falar por cima interrompe.
 
 Para decidir você mesmo quando ela ouve, segure o `+` do teclado numérico enquanto
-fala e solte para enviar — inclusive por cima da fala dela, que é interrompida. A tecla
-só pertence à Friday enquanto ela está na tela; fora disso o `+` digita normalmente.
+fala e solte para enviar. Funciona de qualquer lugar do Windows e a qualquer momento:
+com ela fechada, segurar a tecla abre a janela dela e já começa a captar; com ela
+falando, interrompe. O `+` do numpad passa a ser dela durante toda a sessão — quem
+quiser a tecla de volta é só esvaziar `hotkeys.hermes_push_to_talk` na configuração.
 Toques com menos de um segundo e gravações sem voz são descartados sem gastar um turno,
 e `Esc` durante a pressionada descarta o que foi gravado.
 

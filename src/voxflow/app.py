@@ -142,6 +142,7 @@ class VoxFlowController(QObject):
         self._hermes_generation = 0
         self._talk_active = False
         self._talk_started_at = 0.0
+        self._pending_talk_clip: AudioClip | None = None
         self._hermes_cancel = threading.Event()
         self._hermes_client = self._create_hermes_client(config)
         self._sentence_buffer = SentenceBuffer()
@@ -217,6 +218,10 @@ class VoxFlowController(QObject):
 
     def start(self) -> None:
         self._audio.open()
+        # The key belongs to Friday for the whole session, not only while she is up:
+        # the point is to reach her from whatever you happen to be typing in. Emptying
+        # `hermes_push_to_talk` in the configuration gives the key back to Windows.
+        self._hotkey.set_talk_armed(bool(self._config.hotkeys.hermes_push_to_talk))
         self._hotkey.start()
         self._executor.submit(self._stt.warmup)
         logger.info("voxflow_ready phase=4.5 hotkeys=ctrl+num_add,f9,num_add")
@@ -526,14 +531,23 @@ class VoxFlowController(QObject):
         if action == "start_mode":
             if self._hermes_state is not HermesState.STARTING:
                 return
-            if ok:
-                self._enter_hermes_listening("fale ou segure + do teclado numérico; F9 encerra")
-            else:
+            if not ok:
+                self._pending_talk_clip = None
                 self._set_hermes_state(HermesState.OFF, message)
+                return
+            pending, self._pending_talk_clip = self._pending_talk_clip, None
+            if self._talk_active:
+                # The key is still down. She is up now, and the recording already
+                # running carries straight on into the turn.
+                self._enter_hermes_listening("gravando — solte para enviar")
+                return
+            self._enter_hermes_listening("fale ou segure + do teclado numérico; F9 encerra")
+            if pending is not None:
+                logger.info("push_to_talk_pending_dispatched audio_ms={:.0f}", pending.audio_ms)
+                self._dispatch_hermes_clip(pending)
 
     def _set_hermes_state(self, state: HermesState, message: str = "") -> None:
         self._hermes_state = state
-        self._hotkey.set_talk_armed(state not in {HermesState.OFF, HermesState.STARTING})
         self._signals.hermes_state_changed.emit(state.value, message)
         self._signals.status_changed.emit(f"Hermes: {message or state.value}")
 
@@ -559,6 +573,7 @@ class VoxFlowController(QObject):
     def _stop_hermes_mode(self) -> None:
         self._hermes_generation += 1
         self._talk_active = False
+        self._pending_talk_clip = None
         self._abandon_hermes_turn()
         self._speaker.interrupt()
         self._hermes_timer.stop()
@@ -600,11 +615,20 @@ class VoxFlowController(QObject):
 
     @Slot()
     def _on_talk_pressed(self) -> None:
-        """Numpad + went down: Friday listens, whatever she was doing."""
+        """Numpad + went down, from wherever you were typing: Friday listens."""
 
-        if self._hermes_state in {HermesState.OFF, HermesState.STARTING} or self._talk_active:
+        if self._talk_active:
             return
-        if self._hermes_state is not HermesState.LISTENING:
+        if self._hermes_state is HermesState.OFF:
+            if self._state is not DictationState.IDLE:
+                self._signals.status_changed.emit("Finalize o ditado antes de falar com a Friday")
+                return
+            # Holding the key is the whole gesture. She is called and the microphone
+            # opens at once; the local service comes up while you talk and the turn
+            # waits for it, so nothing of what you said is lost to the startup.
+            logger.info("push_to_talk_wakes_hermes")
+            self.toggle_hermes()
+        elif self._hermes_state not in {HermesState.STARTING, HermesState.LISTENING}:
             # Pressing the key mid-answer is an interruption, and reads exactly like
             # the barge-in the voice detector performs when it hears you talk over her.
             logger.info("push_to_talk_interrupt state={}", self._hermes_state)
@@ -613,12 +637,16 @@ class VoxFlowController(QObject):
             self._speaker.interrupt()
         self._talk_active = True
         self._talk_started_at = time.perf_counter()
+        self._pending_talk_clip = None
         self._vad.reset()
         self._barge_vad.reset()
         if not self._audio.is_recording:
             self._audio.start_recording()
         self._signals.hermes_turn_started.emit()
-        self._set_hermes_state(HermesState.LISTENING, "gravando — solte para enviar")
+        if self._hermes_state is HermesState.STARTING:
+            self._set_hermes_state(HermesState.STARTING, "gravando — chamando a Friday")
+        else:
+            self._set_hermes_state(HermesState.LISTENING, "gravando — solte para enviar")
         play_cue("start", enabled=self._config.general.sounds)
 
     @Slot()
@@ -632,16 +660,31 @@ class VoxFlowController(QObject):
         clip = self._audio.stop_recording()
         if held_ms < self._config.hotkeys.hermes_push_to_talk_ms:
             logger.info("push_to_talk_discarded reason=too_short held_ms={:.0f}", held_ms)
-            self._enter_hermes_listening("toque curto ignorado")
+            self._discard_talk("toque curto ignorado")
             return
         if clip is None or clip.rms < self._config.audio.minimum_rms:
             rms = clip.rms if clip is not None else 0.0
             logger.info("push_to_talk_discarded reason=low_rms rms={:.6f}", rms)
-            play_cue("cancel", enabled=self._config.general.sounds)
-            self._enter_hermes_listening("não ouvi fala; nada foi enviado")
+            self._discard_talk("não ouvi fala; nada foi enviado")
             return
         logger.info("push_to_talk_sent held_ms={:.0f} audio_ms={:.0f}", held_ms, clip.audio_ms)
+        if self._hermes_state is HermesState.STARTING:
+            # She was called by this very press and is still coming up. The turn waits
+            # rather than being thrown away, so a fast speaker loses nothing.
+            self._pending_talk_clip = clip
+            self._set_hermes_state(HermesState.STARTING, "chamando a Friday para te ouvir")
+            return
         self._dispatch_hermes_clip(clip)
+
+    def _discard_talk(self, message: str) -> None:
+        play_cue("cancel", enabled=self._config.general.sounds)
+        self._pending_talk_clip = None
+        if self._hermes_state is HermesState.STARTING:
+            # Nothing to send, but she was already called; her own startup result is
+            # what puts her into listening.
+            self._signals.status_changed.emit(f"Hermes: {message}")
+            return
+        self._enter_hermes_listening(message)
 
     @Slot()
     def _on_talk_cancelled(self) -> None:
@@ -650,8 +693,7 @@ class VoxFlowController(QObject):
         self._talk_active = False
         self._audio.stop_recording()
         logger.info("push_to_talk_cancelled")
-        play_cue("cancel", enabled=self._config.general.sounds)
-        self._enter_hermes_listening("gravação descartada")
+        self._discard_talk("gravação descartada")
 
     def _finish_hermes_utterance(self) -> None:
         clip = self._audio.stop_recording()

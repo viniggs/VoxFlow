@@ -577,3 +577,42 @@ padrão sozinho não o alcançaria.
 `tests/test_push_to_talk.py` (novo), `tests/test_push_to_talk_rules.py` (novo).
 
 Validação: Ruff aprovado, 83 testes aprovados.
+
+## 0.7.4 — A tecla da Friday é global (2026-09-07)
+
+Correção de uma decisão errada em 0.7.3. Naquela versão eu limitei a posse do `+` do
+numpad ao tempo em que a Friday estava ativa, para não tirar a tecla do usuário no
+Windows inteiro. O usuário rejeitou: ele **quer** a tecla tomada, porque o objetivo é
+falar com ela de dentro do editor de notas, sem passar pelo F9 antes. O `+` que ele
+usa para digitar é o da tecla que divide com `=`, no teclado principal, que nunca foi
+tocado (`VK_OEM_PLUS`, diferente de `VK_ADD`).
+
+O que mudou:
+
+- `set_talk_armed` passou de `_set_hermes_state` (por estado) para `start()` (uma vez,
+  pela configuração). Esvaziar `hotkeys.hermes_push_to_talk` devolve a tecla ao Windows;
+  é a única saída, e é intencional que seja explícita.
+- **Segurar a tecla com a Friday fechada agora a acorda e já grava.** `_on_talk_pressed`
+  chama `toggle_hermes()`, que já estava ligado a `conversation.present()` em
+  `main.py` — a janela abre sozinha e o microfone abre no mesmo gesto.
+- Como a subida do serviço é assíncrona, quem fala rápido soltaria a tecla antes de ela
+  estar de pé. O clipe fica em `_pending_talk_clip` e `_on_gateway_result` o despacha
+  quando a subida confirma. Se a subida falhar, o clipe é descartado junto.
+- Se a tecla ainda estiver pressionada quando a subida terminar, a gravação em curso
+  continua direto para o turno, sem reiniciar.
+- Um `+` segurado com um ditado ainda em voo é recusado, pela mesma razão que
+  `toggle_hermes` já recusava: os dois caminhos disputariam o mesmo microfone.
+
+### Uma armadilha que o teste pegou
+
+O primeiro stub de `_enter_hermes_listening` nos testes só registrava a mensagem, sem
+mudar o estado — e o teste "ainda segurando quando ela termina de subir" falhou. Era
+artefato do stub, não do código, mas mostrou que o fluxo depende de entrar em
+`LISTENING` para sair de `STARTING`. O stub agora espelha isso.
+
+### Arquivos alterados
+
+`src/voxflow/app.py`, `tests/test_push_to_talk.py`, `tests/test_push_to_talk_rules.py`,
+`README.md`, `PROMPT_INICIALIZACAO_PROXIMA_IA.md`.
+
+Validação: Ruff aprovado, 90 testes aprovados.
