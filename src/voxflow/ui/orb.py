@@ -26,7 +26,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QWidget
 
-from voxflow.ui.gpu import render_core
+from voxflow.ui.gpu import render_orb
 from voxflow.ui.theme import StatePalette, VisualState, lerp_color, palette_for, with_alpha
 
 _ACTIVE_FPS = 60
@@ -402,10 +402,36 @@ class Orb(QWidget):
 
         self._paint_glow(painter, palette, center)
         self._paint_ripples(painter, palette, center, radius)
-        self._paint_shell(painter, palette, center, radius, motion, front=False)
-        self._paint_core(painter, palette, center, inner, motion)
-        self._paint_shell(painter, palette, center, radius, motion, front=True)
+        if not self._paint_gpu_orb(painter, palette, motion):
+            # No GPU: fall back to the painter shell and membrane.
+            self._paint_shell(painter, palette, center, radius, motion, front=False)
+            self._paint_membrane_core(painter, palette, center, inner)
+            self._paint_shell(painter, palette, center, radius, motion, front=True)
         painter.end()
+
+    def _paint_gpu_orb(
+        self, painter: QPainter, palette: StatePalette, motion: Motion
+    ) -> bool:
+        """Draw the whole orb from one shader pass. Returns False without a GPU."""
+
+        side = float(self._diameter)
+        image = render_orb(
+            int(side * self.devicePixelRatioF()),
+            palette,
+            self._time,
+            motion.core_turbulence,
+            motion.core_flow,
+            self._amplitude,
+        )
+        if image is None:
+            return False
+        painter.save()
+        # Light adds. Source-over would have the orb hide the sky behind it; Plus lets
+        # it glow over the stars the way an emitting volume actually would.
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Plus)
+        painter.drawImage(QRectF(0.0, 0.0, side, side), image)
+        painter.restore()
+        return True
 
     def _paint_shell(
         self,
@@ -449,42 +475,6 @@ class Orb(QWidget):
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             painter.setPen(pen)
             painter.drawPoints(QPolygonF(points))
-
-    def _paint_core(
-        self,
-        painter: QPainter,
-        palette: StatePalette,
-        center: QPointF,
-        inner: float,
-        motion: Motion,
-    ) -> None:
-        """Raymarch the core on the GPU, falling back to the painter membrane.
-
-        Light inside a volume is an integral along a ray. The membrane below is the
-        best a 2D rasteriser can do; when a GPU is available the real thing is both
-        far better looking and roughly twenty times cheaper.
-        """
-
-        ratio = self.devicePixelRatioF()
-        box = inner * 2.9
-        image = render_core(
-            int(box * ratio),
-            palette,
-            self._time,
-            motion.core_turbulence,
-            motion.core_flow,
-        )
-        if image is not None:
-            painter.save()
-            # Light adds. Source-over would have the core hide the sky behind it; Plus
-            # lets it glow over the stars the way an emitting volume actually would.
-            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Plus)
-            painter.drawImage(
-                QRectF(center.x() - box / 2, center.y() - box / 2, box, box), image
-            )
-            painter.restore()
-            return
-        self._paint_membrane_core(painter, palette, center, inner)
 
     def _paint_membrane_core(
         self, painter: QPainter, palette: StatePalette, center: QPointF, inner: float

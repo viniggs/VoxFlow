@@ -116,6 +116,7 @@ uniform float uFlow;
 uniform vec3 uDeep;
 uniform vec3 uMid;
 uniform vec3 uHot;
+uniform float uAmplitude;
 
 __NOISE__
 
@@ -130,16 +131,64 @@ vec3 warp(vec3 p, float t) {
     return p + uTurbulence * (q - 0.5) * 1.15;
 }
 
+#define CORE_BOUND 0.66
+#define MOTE_RADIUS 0.88
+
+vec3 hash3(vec3 p) {
+    return vec3(hash(p), hash(p + 19.7), hash(p + 71.3));
+}
+
+// A jittered lattice of points. One cell lookup per sample is enough because the motes
+// are far smaller than a cell, so neighbours never reach across the boundary.
+float moteField(vec3 p, float t) {
+    // The lattice is advected by a slow noise flow, which carries the motes *along*
+    // the surface. Displacing them radially instead is what made the shell pump.
+    vec3 drift = vec3(
+        fbm(p * 0.85 + vec3(0.0, t * 0.05, 0.0)),
+        fbm(p * 0.85 + vec3(4.1, 0.0, t * 0.04)),
+        fbm(p * 0.85 + vec3(t * 0.045, 3.3, 1.7))
+    );
+    vec3 q = p + (drift - 0.5) * 0.11;
+    vec3 g = q * 38.0;
+    vec3 cell = floor(g);
+    vec3 f = fract(g) - 0.5;
+    vec3 jitter = (hash3(cell) - 0.5) * 0.74;
+    return smoothstep(0.17, 0.015, length(f - jitter));
+}
+
+// The shell is a surface, so it is intersected rather than marched: two samples per
+// pixel instead of sixty-four, for a field of several thousand motes.
+vec3 shellMotes(vec3 ro, vec3 rd) {
+    float b = dot(ro, rd);
+    float c = dot(ro, ro) - MOTE_RADIUS * MOTE_RADIUS;
+    float h = b * b - c;
+    if (h <= 0.0) return vec3(0.0);
+    h = sqrt(h);
+    float t = uTime * uFlow * 0.55;
+    vec3 total = vec3(0.0);
+    // Far face first, then near: the near layer is brighter, and that reads as depth.
+    float hits[2] = float[](-b + h, -b - h);
+    float weights[2] = float[](0.40, 1.0);
+    for (int i = 0; i < 2; i++) {
+        float m = moteField(ro + rd * hits[i], t);
+        if (m <= 0.0) continue;
+        vec3 tint = mix(uDeep, uMid, weights[i]);
+        if (i == 1) tint = mix(tint, uHot, 0.30);
+        total += tint * m * weights[i];
+    }
+    return total * (0.62 + 0.38 * uAmplitude);
+}
+
 struct Sample { float density; float veins; };
 
 Sample volume(vec3 pos, float t) {
     // A thin gaussian shell. Thickness is what turned this into fog: a fat shell
     // integrates dozens of samples per ray and averages all the structure away.
     float r = length(pos);
-    float shell = exp(-pow((r - 0.74) / 0.115, 2.0));
+    float shell = exp(-pow((r - 0.50) / 0.078, 2.0));
     if (shell < 0.006) return Sample(0.0, 0.0);
 
-    vec3 w = warp(pos * 1.45, t);
+    vec3 w = warp(pos * 2.55, t);
 
     // Ridges cubed: the filaments have to dominate, or the volume reads as wool.
     float veins = ridged(w * 1.6 + vec3(0.0, t * 0.09, 0.0));
@@ -158,21 +207,21 @@ void main() {
 
     // Analytic entry and exit of the bounding sphere: every step is spent inside the
     // volume instead of marching through empty space.
-    float b = dot(origin, direction);
-    float c = dot(origin, origin) - 1.0;
-    float h = b * b - c;
-    if (h <= 0.0) {
-        frag = vec4(0.0);
-        return;
-    }
-    h = sqrt(h);
-    float near = -b - h;
-    float far = -b + h;
-
-    const int STEPS = 64;
-    float span = (far - near) / float(STEPS);
     vec3 colour = vec3(0.0);
     float transmittance = 1.0;
+
+    float b = dot(origin, direction);
+    float c = dot(origin, origin) - CORE_BOUND * CORE_BOUND;
+    float h = b * b - c;
+    // Rays that miss the core still carry motes, so this only skips the march.
+    float span = 0.0;
+    float near = 0.0;
+    const int STEPS = 56;
+    if (h > 0.0) {
+    h = sqrt(h);
+    near = -b - h;
+    float far = -b + h;
+    span = (far - near) / float(STEPS);
 
     for (int i = 0; i < STEPS; i++) {
         float t = near + (float(i) + 0.5) * span;
@@ -190,6 +239,9 @@ void main() {
         transmittance *= exp(-s.density * span * 0.85);
         if (transmittance < 0.015) break;
     }
+    }
+
+    colour += shellMotes(origin, direction);
 
     // Radiance has no upper bound, but a pixel does; tone map before writing out.
     vec3 mapped = vec3(1.0) - exp(-colour * 1.55);
@@ -345,6 +397,7 @@ class _ShaderCore:
         seconds: float,
         turbulence: float,
         flow: float,
+        amplitude: float,
     ) -> QImage | None:
         if _FORCE_PAINTER or not self._ensure():
             return None
@@ -360,7 +413,7 @@ class _ShaderCore:
             functions.glDisable(_GL_BLEND)
             self._vao.bind()  # type: ignore[union-attr]
 
-            self._pass_raymarch(functions, palette, seconds, turbulence, flow)
+            self._pass_raymarch(functions, palette, seconds, turbulence, flow, amplitude)
             self._pass_bloom(functions)
             image = self._pass_composite(functions)
 
@@ -380,6 +433,7 @@ class _ShaderCore:
         seconds: float,
         turbulence: float,
         flow: float,
+        amplitude: float,
     ) -> None:
         scene, program = self._scene, self._raymarch
         assert scene is not None and program is not None
@@ -391,6 +445,7 @@ class _ShaderCore:
         program.setUniformValue1f("uTime", float(seconds))
         program.setUniformValue1f("uTurbulence", float(turbulence))
         program.setUniformValue1f("uFlow", float(flow))
+        program.setUniformValue1f("uAmplitude", float(amplitude))
         program.setUniformValue("uDeep", _vector(palette.glow, 0.55))
         program.setUniformValue("uMid", _vector(palette.core, 1.0))
         program.setUniformValue("uHot", _vector(palette.core, 1.0, whiten=0.62))
@@ -439,7 +494,7 @@ class _ShaderCore:
         functions.glActiveTexture(_GL_TEXTURE0 + 1)
         functions.glBindTexture(_GL_TEXTURE_2D, bloom.texture())
         program.setUniformValue1i("uBloom", 1)
-        program.setUniformValue1f("uBloomGain", 0.55)
+        program.setUniformValue1f("uBloomGain", 0.42)
         functions.glDrawArrays(_GL_TRIANGLES, 0, 3)
         program.release()
         image = final.toImage()
@@ -470,13 +525,14 @@ def _vector2(pair: tuple[float, float]) -> QVector2D:
 _CORE = _ShaderCore()
 
 
-def render_core(
+def render_orb(
     size: int,
     palette: StatePalette,
     seconds: float,
     turbulence: float,
     flow: float,
+    amplitude: float,
 ) -> QImage | None:
-    """Render one core frame on the GPU, or ``None`` if the GPU path is unavailable."""
+    """Render one whole orb — core and mote shell — or ``None`` without a GPU."""
 
-    return _CORE.render(size, palette, seconds, turbulence, flow)
+    return _CORE.render(size, palette, seconds, turbulence, flow, amplitude)
