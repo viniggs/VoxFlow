@@ -22,6 +22,9 @@ class GeneralConfig(StrictModel):
     language: Literal["auto", "pt", "en"] = "auto"
     autostart: bool = True
     sounds: bool = True
+    #: Requirements the user has already seen and chosen to live without. The setup
+    #: assistant stays quiet unless something new is missing.
+    setup_acknowledged: list[str] = Field(default_factory=list)
 
 
 class HotkeysConfig(StrictModel):
@@ -29,8 +32,8 @@ class HotkeysConfig(StrictModel):
     dictation_lock: str = "double_tap"
     hermes_toggle: str = "f9"
     cancel: str = "esc"
-    #: Hold to talk to Friday. Only claimed while she is on screen, so the key keeps
-    #: typing "+" everywhere else.
+    #: Hold to talk to Friday, from anywhere. The key is claimed for the whole
+    #: session; emptying this gives it back to Windows.
     hermes_push_to_talk: str = "num_add"
     #: A tap shorter than this is a slip, not a turn, and is thrown away unheard.
     hermes_push_to_talk_ms: int = Field(default=1000, ge=200, le=5000)
@@ -102,6 +105,8 @@ class TTSConfig(StrictModel):
 
 class HermesConfig(StrictModel):
     base_url: str = "http://127.0.0.1:8642/v1"
+    #: Empty means the default install location. Set when Hermes lives elsewhere.
+    executable_path: str = ""
     session_key: str = "voxflow:estudo"
     conversation_id: str = "voxflow:estudo"
     half_duplex: bool = False

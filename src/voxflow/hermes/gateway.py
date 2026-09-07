@@ -10,7 +10,12 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-def gateway_executable() -> Path:
+def gateway_executable(configured: str = "") -> Path:
+    """Where Hermes lives. A configured path wins over the default install location."""
+
+    chosen = configured.strip()
+    if chosen:
+        return Path(chosen)
     return Path(os.environ.get("LOCALAPPDATA", "")) / "hermes" / "bin" / "hermes.exe"
 
 
@@ -25,10 +30,14 @@ def gateway_reachable(base_url: str, timeout: float = 0.25) -> bool:
         return False
 
 
-def start_gateway(base_url: str, wait_seconds: float = 60.0) -> tuple[bool, str]:
+def start_gateway(
+    base_url: str,
+    wait_seconds: float = 60.0,
+    executable_path: str = "",
+) -> tuple[bool, str]:
     if gateway_reachable(base_url):
         return True, "Hermes já está ativo"
-    executable = gateway_executable()
+    executable = gateway_executable(executable_path)
     if not executable.exists():
         return False, "Hermes não foi encontrado neste computador"
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0

@@ -227,3 +227,45 @@ Substitui os itens de 0.7.3 sobre a posse da tecla, que testavam o contrário.
   na janela ativa ao soltar a tecla.
 - [ ] Ditar com `Ctrl + Numpad +` e, **enquanto a transcrição roda**, segurar o `+`.
   Confirmar que ele é recusado com aviso, sem embaralhar os dois caminhos.
+
+---
+
+# VoxFlow 0.7.5 — Assistente de primeira execução
+
+Data: 2026-09-07
+
+## No teu computador (nada deve mudar)
+
+- [ ] Instalar por cima e abrir. Como já tens Hermes, plugin, microfone e chave, o
+  assistente **não deve aparecer**.
+- [ ] Confirmar que a Friday e o ditado continuam funcionando como antes.
+
+## Simulando o computador do amigo
+
+- [ ] Renomear temporariamente `%LOCALAPPDATA%\hermes\plugins\voxflow-reasoning` e
+  abrir o app. O assistente deve aparecer apontando o plugin como não instalado.
+- [ ] Clicar em **Instalar plugin** e confirmar a mensagem de sucesso. Verificar que os
+  dois arquivos voltaram para a pasta.
+- [ ] Clicar em **Verificar de novo** e confirmar que a linha virou ✓.
+- [ ] Clicar em **Continuar assim mesmo** e reabrir o app: o assistente **não deve
+  voltar**, porque nada novo está faltando.
+
+## O seletor do Hermes
+
+- [ ] Editar `%APPDATA%\VoxFlow\config.yaml` e pôr um `executable_path` inexistente.
+  Abrir o app: o assistente deve aparecer dizendo que não encontrou o Hermes.
+- [ ] Usar **Procurar hermes.exe…**, apontar o real, e confirmar que a linha vira ✓ e
+  que a Friday sobe normalmente depois.
+
+## Microfone e chave
+
+- [ ] Trocar o microfone no seletor do assistente e confirmar que a escolha aparece
+  depois em Ajustes → Áudio.
+- [ ] Confirmar que a chave, quando já existe, aparece como "Configurada" e sem campo
+  de digitação.
+
+## Entrega ao amigo
+
+- [ ] Mandar só o `.exe` e confirmar com ele: SmartScreen pede "Executar assim mesmo";
+  o assistente aparece; o botão de instalar plugin funciona; o Whisper baixa sozinho na
+  primeira transcrição.

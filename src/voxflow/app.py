@@ -491,7 +491,7 @@ class VoxFlowController(QObject):
             return
         self._set_hermes_state(HermesState.STARTING, "iniciando o serviço local")
         self._signals.hermes_mode_changed.emit("hermes")
-        future = self._hermes_executor.submit(start_gateway, self._config.hermes.base_url)
+        future = self._hermes_executor.submit(self._start_gateway)
         future.add_done_callback(lambda done: self._complete_gateway("start_mode", done))
 
     @Slot(str)
@@ -506,13 +506,19 @@ class VoxFlowController(QObject):
         if action == "health":
             future = self._hermes_control.submit(self._hermes_client.health)
         elif action == "start":
-            future = self._hermes_control.submit(start_gateway, self._config.hermes.base_url)
+            future = self._hermes_control.submit(self._start_gateway)
         elif action == "stop":
             self._stop_hermes_mode()
             future = self._hermes_control.submit(stop_gateway)
         else:
             return
         future.add_done_callback(lambda done, current=action: self._complete_gateway(current, done))
+
+    def _start_gateway(self) -> tuple[bool, str]:
+        return start_gateway(
+            self._config.hermes.base_url,
+            executable_path=self._config.hermes.executable_path,
+        )
 
     def _complete_gateway(self, action: str, future: Future[tuple[bool, str]]) -> None:
         try:

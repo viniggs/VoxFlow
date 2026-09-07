@@ -146,3 +146,30 @@ removido em 0.7.3: cortava explicações justamente quando o usuário pedia prof
 Se alguém reclamar de resposta curta demais ou longa demais, é esse texto que manda —
 e ele também fica persistido no `config.yaml` do usuário, então mudar só o padrão do
 código não alcança quem já tem o arquivo salvo.
+
+## Distribuição para outras máquinas (0.7.5)
+
+O app cresceu numa máquina onde tudo já estava no lugar. `src/voxflow/setup_check.py`
+existe para descobrir isso em qualquer outra, e é sem Qt de propósito — a lógica é
+testável e a janela (`ui/setup_wizard.py`) só a desenha.
+
+Fatos que custaram para ser descobertos:
+
+- **O plugin de raciocínio fica em `%LOCALAPPDATA%\hermes\plugins\`**, não em
+  `~/.hermes/plugins/` como o README dizia até 0.7.5. Ele agora é versionado em
+  `packaging/hermes-plugin/` e embarcado pelo PyInstaller.
+- **Nada da máquina de origem viaja no instalador.** Config em `%APPDATA%\VoxFlow`,
+  segredos no Credential Manager, e os defaults com `Path.home()` são resolvidos com
+  `default_factory`, ou seja, na máquina de destino.
+- **O modelo Whisper não é embarcado** (1,6 GB contra 97 MB de instalador). Ele é
+  baixado na primeira transcrição porque `local_files_only` é falso quando o cache não
+  existe. Se alguém reclamar de "primeira execução travada", é isso.
+- **`cuda_dll_dirs` e `chatterbox_path` apontam para pastas do usuário original.**
+  Diretório inexistente é ignorado sem erro, então não quebram nada — mas continuam
+  errados em qualquer outra máquina.
+
+Se for acrescentar um requisito ao assistente, mexa em `check_requirements` e marque
+`optional` corretamente: opcional degrada um recurso, obrigatório remove um inteiro.
+`general.setup_acknowledged` é o que impede a janela de reaparecer para algo que o
+usuário já recusou — grave só o que ainda falta no momento do "Continuar assim mesmo",
+nunca a lista inteira.

@@ -1,0 +1,6 @@
+name: voxflow-reasoning
+version: 1.0.0
+description: "Streams reasoning deltas to VoxFlow via append-only JSONL file."
+author: "Friday"
+hooks:
+  - on_stream_delta

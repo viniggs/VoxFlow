@@ -616,3 +616,64 @@ artefato do stub, não do código, mas mostrou que o fluxo depende de entrar em
 `README.md`, `PROMPT_INICIALIZACAO_PROXIMA_IA.md`.
 
 Validação: Ruff aprovado, 90 testes aprovados.
+
+## 0.7.5 — Assistente de primeira execução e plugin versionado (2026-09-07)
+
+Motivada por uma pergunta do usuário: dá para mandar o instalador para um amigo? A
+auditoria encontrou coisas que eram verdade só na máquina de origem.
+
+### O plugin de raciocínio não existia em lugar nenhum versionado
+
+Ele estava apenas em `%LOCALAPPDATA%\hermes\plugins\voxflow-reasoning\`, na máquina do
+usuário. Não estava no repositório, nem no instalador, nem em backup. Um disco perdido
+levava junto. Agora vive em `packaging/hermes-plugin/voxflow-reasoning/` e é embarcado
+pelo PyInstaller em `hermes-plugin/`.
+
+`tests/test_setup_check.py::test_the_plugin_is_vendored_in_the_repository` roda contra
+o arquivo real, então uma entrega que esquecer de versioná-lo falha aqui e não na
+máquina de outra pessoa.
+
+### O README apontava o caminho errado do plugin
+
+Dizia `~/.hermes/plugins/`. O correto é `%LOCALAPPDATA%\hermes\plugins\`. Quem seguisse
+a documentação instalaria no lugar errado e não teria como descobrir por quê.
+
+### O caminho do Hermes era imutável
+
+`gateway_executable()` tinha o caminho fixo. Se o Hermes estivesse em outro lugar, não
+havia nada a fazer pela interface. Agora existe `hermes.executable_path` (vazio = local
+padrão) e o assistente tem um seletor de arquivo.
+
+### O assistente
+
+`src/voxflow/setup_check.py` responde o que falta, sem Qt, e por isso é testável:
+Hermes, plugin (`ok`/`outdated`/`missing`/`unavailable`), microfone e chave do
+`opencode_go`. `src/voxflow/ui/setup_wizard.py` desenha isso sobre `CosmicPanel`, com
+os reparos: procurar o `hermes.exe`, instalar o plugin, escolher o microfone e guardar
+a chave no Credential Manager.
+
+Aparece em `main.py` antes de `controller.start()` — antes do microfone abrir e dos
+atalhos entrarem no ar — e só quando falta algo que o usuário ainda não dispensou.
+`general.setup_acknowledged` guarda o que foi dispensado; o assistente volta se algo
+**novo** faltar, e não repete o que já foi recusado.
+
+Requisitos são marcados `optional` quando degradam um recurso (plugin, chave, microfone
+diferente do configurado) e obrigatórios quando removem um inteiro (Hermes ausente,
+nenhum microfone). O microfone continua caindo no primeiro dispositivo disponível — o
+assistente só passou a dizer isso em voz alta em vez de trocar em silêncio.
+
+### Efeito colateral útil
+
+`_resolve_api_key` do `DictationCleaner` virou `resolve_opencode_key(secrets)` no nível
+do módulo, porque o assistente precisa saber se a chave existe sem construir um cleaner.
+
+### Arquivos alterados
+
+`src/voxflow/setup_check.py` (novo), `src/voxflow/ui/setup_wizard.py` (novo),
+`packaging/hermes-plugin/voxflow-reasoning/` (novo), `src/voxflow/main.py`,
+`src/voxflow/config.py`, `src/voxflow/app.py`, `src/voxflow/hermes/gateway.py`,
+`src/voxflow/text/cleanup.py`, `packaging/voxflow.spec`,
+`tests/test_setup_check.py` (novo), `README.md`.
+
+Validação: Ruff aprovado, 105 testes aprovados, assistente renderizado (665×560) com as
+quatro linhas corretas numa máquina simulada sem Hermes e sem plugin.

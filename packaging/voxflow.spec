@@ -8,7 +8,9 @@ analysis = Analysis(
     [str(project_root / "src" / "voxflow" / "main.py")],
     pathex=[str(project_root / "src")],
     binaries=[],
-    datas=[],
+    # The reasoning plugin travels with the app: the setup assistant installs it
+    # into the Hermes plugin folder, so nobody has to be told where it lives.
+    datas=[(str(project_root / "packaging" / "hermes-plugin"), "hermes-plugin")],
     hiddenimports=["keyring.backends.Windows", *collect_submodules("edge_tts")],
     hookspath=[],
     hooksconfig={},

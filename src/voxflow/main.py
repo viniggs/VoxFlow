@@ -13,6 +13,7 @@ from voxflow.config import load_config
 from voxflow.diagnostics import run_check
 from voxflow.logging_config import configure_logging
 from voxflow.paths import get_app_paths
+from voxflow.ui.setup_wizard import SetupWizard, needs_setup
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -133,6 +134,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     overlay.cancel_requested.connect(controller.cancel_dictation)
     tray.quit_requested.connect(application.quit)
     window.show()
+    # Everything this checks was implicitly true on the machine VoxFlow was built on.
+    # On anybody else's it has to be found, so it is asked about before the controller
+    # opens the microphone and the shortcuts go live.
+    setup_wizard: SetupWizard | None = None
+    if needs_setup(config):
+        setup_wizard = SetupWizard(config, paths)
+        setup_wizard.applied.connect(controller.apply_config)
+        setup_wizard.show()
+        setup_wizard.raise_()
+        setup_wizard.activateWindow()
     try:
         controller.start()
     except Exception as exc:

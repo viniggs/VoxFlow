@@ -22,9 +22,27 @@ quiser a tecla de volta é só esvaziar `hotkeys.hermes_push_to_talk` na configu
 Toques com menos de um segundo e gravações sem voz são descartados sem gastar um turno,
 e `Esc` durante a pressionada descarta o que foi gravado.
 
-O pensamento depende de um plugin instalado no Hermes
-(`~/.hermes/plugins/voxflow-reasoning/`), que escreve os deltas de raciocínio em
-`%LOCALAPPDATA%\VoxFlow\reasoning\stream.jsonl`. Sem ele o resto funciona igual.
+O pensamento depende de um plugin instalado no Hermes, em
+`%LOCALAPPDATA%\hermes\plugins\voxflow-reasoning\`, que escreve os deltas de raciocínio
+em `%LOCALAPPDATA%\VoxFlow\reasoning\stream.jsonl`. Sem ele o resto funciona igual. O
+plugin acompanha o VoxFlow: se não estiver instalado, o assistente de configuração
+oferece um botão para copiá-lo, e depois basta reiniciar o Hermes.
+
+## Instalar em outro computador
+
+O instalador é por usuário e não leva nada da máquina de origem: a configuração fica em
+`%APPDATA%\VoxFlow` e os segredos no Gerenciador de Credenciais do Windows. Como não é
+assinado, o SmartScreen pede "Mais informações" → "Executar assim mesmo".
+
+Na primeira execução, se faltar alguma coisa, aparece um assistente mostrando o que é e
+como resolver: apontar o `hermes.exe` quando ele estiver fora do lugar padrão, instalar
+o plugin de raciocínio, escolher o microfone e guardar a chave de limpeza do ditado. Dá
+para seguir sem resolver — o ditado funciona de qualquer jeito — e o assistente só volta
+a aparecer se algo novo faltar.
+
+Duas coisas ficam por conta de quem recebe: o **Hermes** instalado e autenticado com a
+conta dele, e o **modelo Whisper** (cerca de 1,6 GB), baixado na primeira transcrição
+porque não cabe no instalador.
 
 ## Desenvolvimento
 

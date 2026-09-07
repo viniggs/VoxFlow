@@ -20,6 +20,27 @@ from voxflow.text.context import ActiveApp, AppRule
 GO_BASE_URL = "https://opencode.ai/zen/go/v1"
 
 
+def resolve_opencode_key(secrets: SecretStore) -> str | None:
+    """The cleanup key, from the credential store or from opencode's own auth file.
+
+    Shared with the setup check, which needs to report whether the key exists without
+    building a cleaner just to ask."""
+
+    stored = secrets.get("opencode_go")
+    if stored:
+        return stored
+    auth_file = Path.home() / ".local" / "share" / "opencode" / "auth.json"
+    try:
+        payload = json.loads(auth_file.read_text(encoding="utf-8"))
+        key = str(payload["opencode-go"]["key"]).strip()
+        if key:
+            secrets.set("opencode_go", key)
+            return key
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    return None
+
+
 @dataclass(frozen=True, slots=True)
 class CleanupResult:
     text: str
@@ -101,7 +122,7 @@ class DictationCleaner:
     ) -> str:
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "User-Agent": "VoxFlow/0.7.4 Windows dictation",
+            "User-Agent": "VoxFlow/0.7.5 Windows dictation",
             "x-opencode-session": self._session_id,
         }
         prompt = self._system_prompt(app, rule)
@@ -145,19 +166,7 @@ class DictationCleaner:
         )
 
     def _resolve_api_key(self) -> str | None:
-        stored = self._secrets.get("opencode_go")
-        if stored:
-            return stored
-        auth_file = Path.home() / ".local" / "share" / "opencode" / "auth.json"
-        try:
-            payload = json.loads(auth_file.read_text(encoding="utf-8"))
-            key = str(payload["opencode-go"]["key"]).strip()
-            if key:
-                self._secrets.set("opencode_go", key)
-                return key
-        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
-            return None
-        return None
+        return resolve_opencode_key(self._secrets)
 
     @staticmethod
     def _responses_text(payload: dict[str, Any]) -> str:
