@@ -1,7 +1,7 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-07
-Versão: 0.7.0
+Versão: 0.7.1
 Fase concluída no código: Fase 4.5, aguardando aceite manual
 
 ## Objetivo
@@ -450,6 +450,32 @@ reenvio para as famílias `kimi`/`deepseek`/`mimo`, que devolvem 400 se o
 `reasoning_content` não voltar no wire. O provider em uso (`opencode-go`) não está
 nessa tabela. **A chave foi removida.** Backup em
 `config.yaml.bak.pre-reasoning-echo-20260907_111306`.
+
+### 0.7.1 — o pensamento chegava atrasado
+
+Sintoma relatado: durante uma sessão longa, raciocínio do início da conversa aparecia
+no fim, em rajada, num momento de silêncio. A hipótese natural — o leitor reprocessando
+o arquivo — estava errada e foi descartada por medição: zero linhas duplicadas, zero
+timestamps fora de ordem, um bloco contíguo por turno.
+
+A causa estava na renderização. O raciocínio chega em deltas do tamanho de um token:
+uma sessão real gravou 11.651 deltas de 8,3 caracteres em média, e o pior turno sozinho
+teve 3.178 deltas somando 32.944 caracteres num único balão. Cada delta redesenhava o
+balão inteiro — escapando todo o texto acumulado, medindo cada linha, redimensionando —
+o que custa 2 ms com ele vazio e 51 ms com ele cheio. Custo quadrático, na thread que
+também pinta o cosmos e o orbe.
+
+Reproduzindo o pior turno real: 13,78 s de trabalho de interface um delta por vez,
+contra 0,44 s agrupado — 106 redesenhos em vez de 3.178.
+
+Correções: o leitor junta os deltas e os libera a cada 120 ms, forçando a liberação na
+troca de bloco para que um turno nunca se misture ao seguinte; e o balão de pensamento
+mantém apenas a cauda do texto, já que ninguém lê dezenas de milhares de caracteres num
+painel flutuante.
+
+Observado de passagem: o plugin rotaciona o arquivo por rename a cada 1 MiB, e uma
+sessão de 79 minutos gerou 2,18 MB em três arquivos. O leitor acompanha a rotação pelo
+inode.
 
 ### Riscos conhecidos desta entrega
 

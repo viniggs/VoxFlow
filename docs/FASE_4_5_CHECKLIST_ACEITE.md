@@ -105,3 +105,21 @@ não foi tocado.
 
 Se o pensamento não aparecer, o plugin do Hermes é a primeira coisa a conferir:
 `~/.hermes/plugins/voxflow-reasoning/` e `plugins.stream_reasoning_deltas: true`.
+
+---
+
+# VoxFlow 0.7.1 — o pensamento deixa de atrasar
+
+Data: 2026-09-07
+
+- [ ] Instalar `VoxFlow-0.7.1-fase-4.5-setup.exe` por cima.
+- [ ] Fazer uma **sessão longa** com a Friday, de uns quinze minutos, com perguntas que a
+  façam pensar bastante.
+- [ ] Confirmar que o pensamento aparece **acompanhando o raciocínio dela**, e não
+  atrasado.
+- [ ] Ao final, num momento de silêncio, confirmar que **não chega uma rajada de
+  pensamento antigo** do começo da sessão. Era esse o defeito.
+- [ ] Confirmar que o balão de pensamento não cresce sem limite: em turnos muito longos
+  ele mantém a parte final, que é a que ainda está sendo escrita.
+- [ ] Confirmar que a interface continua fluida enquanto ela pensa — sem travadinhas no
+  orbe ou nas estrelas.
