@@ -39,7 +39,7 @@ class FasterWhisperLocalProvider:
     def _resolve_model_path(self) -> str:
         trusted_root = self._trusted_model_root()
         trusted_model = trusted_root / "model.bin"
-        if trusted_model.is_file() and not os.path.islink(str(trusted_model)):
+        if self._trusted_model_is_ready(trusted_model):
             return str(trusted_root)
 
         model_file = self._model_cache / "model.bin"
@@ -64,6 +64,15 @@ class FasterWhisperLocalProvider:
         local_root = Path(os.environ.get("LOCALAPPDATA", Path.home()))
         return local_root / "VoxFlow" / "models" / self._model_name
 
+    @staticmethod
+    def _trusted_model_is_ready(model_file: Path) -> bool:
+        if not model_file.is_file() or os.path.islink(str(model_file)):
+            return False
+        try:
+            return model_file.stat().st_size > 1024 * 1024
+        except OSError:
+            return False
+
     def _materialize_symlinks(self, source_root: Path) -> Path:
         if os.name != "nt":
             return source_root
@@ -85,7 +94,9 @@ class FasterWhisperLocalProvider:
                 destination = destination_root / source.relative_to(source_root)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 if destination.is_file() and not os.path.islink(str(destination)):
-                    continue
+                    if filename != "model.bin" or self._trusted_model_is_ready(destination):
+                        continue
+                    destination.unlink()
                 physical_source = source
                 if os.path.islink(str(source)):
                     link_target = os.readlink(str(source))

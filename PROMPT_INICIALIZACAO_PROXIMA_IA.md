@@ -39,7 +39,8 @@ horas é crítico.
 
 A última build apresentou `WinError 448` ao carregar o `model.bin` simbólico do cache Hugging
 Face. A correção mais recente materializa o snapshot em `%LOCALAPPDATA%\VoxFlow\models\` e
-precisa ser instalada/testada; não trate a Fase 2 como aceita até o ditado funcionar.
+precisa ser instalada/testada; não trate a Fase 2 como aceita até o ditado funcionar. Ela também
+rejeita um `model.bin` incompleto deixado por tentativa anterior.
 
 Ao assumir, confirme primeiro se a entrega emergencial de UI descrita no `CONTINUITY.md` foi
 instalada e aceita. Se houver erro, leia o painel e `%LOCALAPPDATA%\VoxFlow\logs\voxflow.log`,

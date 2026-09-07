@@ -111,7 +111,10 @@ foi acionada: ela também dependia de `.exists()`, que falha nesse mesmo link. A
 seleciona o snapshot sem testar `model.bin` com `.exists()`, detecta o link com `os.path.islink`
 e materializa o snapshot em `%LOCALAPPDATA%\VoxFlow\models\large-v3-turbo`, usando hardlinks
 para os blobs físicos (cópia somente como fallback), eliminando reparse points sem duplicar
-normalmente o modelo de 1,5 GB. A build recompilada ainda precisa de aceite manual do usuário.
+normalmente o modelo de 1,5 GB. A verificação local também encontrou um artefato incompleto de
+5 bytes deixado pela tentativa anterior; o provider agora o rejeita e substitui quando o modelo
+físico não tem tamanho plausível. O provider foi verificado contra o cache real e produziu
+`model.bin` físico de 1.617.884.929 bytes. A build recompilada ainda precisa de aceite manual.
 
 Importante: o usuário esclareceu que “escrita em tempo real” significa somente o preview dentro
 da UI do VoxFlow, não texto sendo inserido no Notepad/Chrome enquanto fala. A injeção no aplicativo
