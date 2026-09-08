@@ -142,7 +142,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     # On anybody else's it has to be found, so it is asked about before the controller
     # opens the microphone and the shortcuts go live.
     setup_wizard: SetupWizard | None = None
-    if needs_setup(config):
+    try:
+        wanted = needs_setup(config)
+    except Exception:
+        # Reporting what is missing must never be the thing that is missing.
+        logger.exception("setup_check_failed")
+        wanted = False
+    if wanted:
         setup_wizard = SetupWizard(config, paths)
         setup_wizard.applied.connect(controller.apply_config)
         setup_wizard.show()

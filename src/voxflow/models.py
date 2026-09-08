@@ -16,6 +16,8 @@ from pathlib import Path
 
 from loguru import logger
 
+from voxflow.fsprobe import is_dir, is_file, modified_at
+
 #: What a slot in the application can consume.
 STT_FASTER_WHISPER = "stt_faster_whisper"
 #: A Whisper checkpoint in Transformers format. VoxFlow cannot load it directly, but it
@@ -88,23 +90,33 @@ def _newest_snapshot(repo: Path) -> Path | None:
     """The snapshot a hub download would be using, or the folder itself."""
 
     snapshots = repo / "snapshots"
-    if snapshots.is_dir():
-        candidates = [item for item in snapshots.iterdir() if item.is_dir()]
+    if is_dir(snapshots):
+        try:
+            candidates = [item for item in snapshots.iterdir() if is_dir(item)]
+        except OSError:
+            return None
         if not candidates:
             return None
-        return max(candidates, key=lambda item: item.stat().st_mtime)
-    return repo if repo.is_dir() else None
+        return max(candidates, key=modified_at)
+    return repo if is_dir(repo) else None
 
 
-def _read_config(folder: Path) -> dict:
+def _read_config(folder: Path) -> tuple[dict, bool]:
+    """The parsed ``config.json`` and whether it could be read at all.
+
+    Unreadable is not the same as absent: a cache whose links cannot be followed still
+    holds a real model, and saying "unrecognised" would be a lie about the disk."""
+
     path = folder / "config.json"
-    if not path.is_file():
-        return {}
+    if not is_file(path):
+        return {}, True
     try:
         loaded = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return loaded if isinstance(loaded, dict) else {}
+    except OSError:
+        return {}, False
+    except ValueError:
+        return {}, True
+    return (loaded if isinstance(loaded, dict) else {}), True
 
 
 def classify(folder: Path) -> tuple[str, str]:
@@ -112,10 +124,10 @@ def classify(folder: Path) -> tuple[str, str]:
 
     try:
         names = {item.name for item in folder.iterdir()}
-    except OSError:
-        return UNKNOWN, "pasta ilegível"
+    except OSError as exc:
+        return UNKNOWN, f"pasta ilegível ({type(exc).__name__})"
     lowered = {name.lower() for name in names}
-    config = _read_config(folder)
+    config, config_readable = _read_config(folder)
 
     # CTranslate2 writes a flat model.bin next to its own vocabulary. This is the only
     # shape faster-whisper can load, so it is the only shape offered for transcription.
@@ -152,18 +164,48 @@ def classify(folder: Path) -> tuple[str, str]:
     if any(name.endswith(".yaml") and "demucs" in name for name in lowered):
         return AUDIO_SEPARATION, "receita .yaml do Demucs"
 
+    if not config_readable:
+        # Everything above matched on file names, which listing a folder gives us even
+        # when its links cannot be followed. What is left needed the config file.
+        return UNKNOWN, "config.json ilegível (links do cache do HuggingFace)"
     return UNKNOWN, "nenhum formato conhecido reconhecido"
 
 
+def _repo_size(repo: Path, snapshot: Path) -> int:
+    """How big this model is.
+
+    The snapshot is the honest answer: it holds the revision in use, while ``blobs``
+    accumulates every revision ever downloaded. But the snapshot is made of links, and
+    on a machine that cannot follow them it measures nothing — so ``blobs`` stands in
+    only when the snapshot comes back empty, which is exactly that case."""
+
+    size = _folder_size(snapshot)
+    if size:
+        return size
+    blobs = repo / "blobs"
+    return _folder_size(blobs) if is_dir(blobs) else 0
+
+
 def _folder_size(folder: Path) -> int:
+    """Bytes under a folder, skipping whatever cannot be measured."""
+
     total = 0
     try:
-        for item in folder.rglob("*"):
-            if item.is_file():
-                try:
-                    total += item.stat().st_size
-                except OSError:
-                    continue
+        walker = folder.rglob("*")
+        while True:
+            try:
+                item = next(walker)
+            except StopIteration:
+                break
+            except OSError:
+                # One unreadable branch must not cost us the rest of the tree.
+                continue
+            if not is_file(item):
+                continue
+            try:
+                total += item.stat().st_size
+            except OSError:
+                continue
     except OSError:
         return total
     return total
@@ -182,27 +224,34 @@ def discover(roots: Iterable[Path] | None = None) -> list[LocalModel]:
     found: list[LocalModel] = []
     seen: set[Path] = set()
     for root in roots if roots is not None else default_roots():
-        if not root.is_dir():
+        if not is_dir(root):
             continue
         try:
             entries = sorted(root.iterdir())
         except OSError:
             continue
         for repo in entries:
-            if not repo.is_dir() or repo.name.startswith("."):
+            if repo.name.startswith(".") or not is_dir(repo):
                 continue
-            snapshot = _newest_snapshot(repo)
-            if snapshot is None or snapshot in seen:
+            try:
+                snapshot = _newest_snapshot(repo)
+                if snapshot is None or snapshot in seen:
+                    continue
+                seen.add(snapshot)
+                kind, evidence = classify(snapshot)
+                size = _repo_size(repo, snapshot)
+            except OSError as exc:
+                # A single unreadable folder is a fact about that folder, not a reason
+                # to leave the whole list empty.
+                logger.warning("model_scan_skipped path={} error={!s}", repo, exc)
                 continue
-            seen.add(snapshot)
-            kind, evidence = classify(snapshot)
             found.append(
                 LocalModel(
                     repo_id=_repo_id(repo),
                     path=repo,
                     kind=kind,
                     evidence=evidence,
-                    size_bytes=_folder_size(snapshot),
+                    size_bytes=size,
                 )
             )
     logger.info(

@@ -379,3 +379,20 @@ Data: 2026-09-07
 - [ ] Selecioná-lo, salvar e **ditar**, confirmando que a transcrição funciona com ele.
 - [ ] Apontar o script para um modelo que não é Whisper (por exemplo um Parakeet) e
   confirmar que ele falha explicando o motivo e **não deixa pasta pela metade**.
+
+---
+
+# VoxFlow 0.7.10 — Correção do travamento na abertura
+
+Data: 2026-09-07
+
+- [ ] Instalar por cima da 0.7.9 e **abrir o app**. Ele tem que subir sem erro — este é
+  o item que importa; a 0.7.9 morria aqui.
+- [ ] Abrir Ajustes → STT e confirmar que a lista de modelos aparece.
+- [ ] Confirmar que os tamanhos estão certos (o turbo deve aparecer com ~1,6 GB, e não
+  com o dobro).
+- [ ] Confirmar que os modelos de voz e o Demucs continuam sendo listados na nota por
+  categoria. Se algum aparecer como *"config.json ilegível"*, está correto: significa
+  que o app instalado não conseguiu seguir os links daquele modelo, e ele foi reportado
+  em vez de escondido.
+- [ ] Ditar e falar com a Friday, confirmando que nada mais regrediu.

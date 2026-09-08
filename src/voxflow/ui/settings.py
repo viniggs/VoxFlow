@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 import sounddevice as sd
+from loguru import logger
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -365,7 +366,11 @@ class SettingsWindow(CosmicPanel):
     def _reload_models(self) -> None:
         """List what is on disk, offering only what this slot can load."""
 
-        found = discover()
+        try:
+            found = discover()
+        except Exception as exc:  # noqa: BLE001 - a model list is never worth a crash
+            logger.warning("model_scan_failed error_type={} error={!s}", type(exc).__name__, exc)
+            found = []
         self._usable_models = for_slot(found, STT_FASTER_WHISPER)
         configured = str(self._config.stt.local_model_cache or "").strip().lower()
         self._model_choice.clear()

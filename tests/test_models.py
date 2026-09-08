@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from voxflow.models import (
     AUDIO_SEPARATION,
     STT_FASTER_WHISPER,
@@ -220,3 +222,110 @@ def test_a_converted_model_is_indistinguishable_from_a_downloaded_one(tmp_path: 
     assert [(item.repo_id, item.kind) for item in found] == [
         ("whisper-large-v3-ptbr", STT_FASTER_WHISPER)
     ]
+
+
+# --- a cache whose links cannot be followed ---------------------------------------
+#
+# The installed application is not always allowed to traverse the symlinks a
+# HuggingFace snapshot is made of. Windows answers 448 — "the path cannot be traversed
+# because it contains an untrusted mount point" — and pathlib does not swallow it, so
+# an unguarded `is_file()` took the whole app down on startup.
+
+
+def untrusted_mount_point(*args, **kwargs):
+    error = OSError(22, "untrusted mount point")
+    error.winerror = 448
+    raise error
+
+
+def test_an_unreadable_config_does_not_take_the_scan_down(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    make(tmp_path, "org--whisper", {"model.bin": "x", "vocabulary.json": "[]"})
+    monkeypatch.setattr(Path, "is_file", untrusted_mount_point)
+    found = discover([tmp_path])
+    # The format is still recognised: it is decided by file names, and listing a folder
+    # never has to follow a link.
+    assert [(item.repo_id, item.kind) for item in found] == [
+        ("org/whisper", STT_FASTER_WHISPER)
+    ]
+
+
+def test_an_unreadable_config_is_reported_as_such(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    folder = make(tmp_path, "org--mystery", {"config.json": "{}", "model.safetensors": "x"})
+    monkeypatch.setattr(Path, "read_text", untrusted_mount_point)
+    kind, evidence = classify(folder)
+    assert kind == UNKNOWN
+    # "Unreadable" and "unrecognised" are different facts about the disk.
+    assert "ilegível" in evidence
+
+
+def test_a_folder_that_cannot_be_listed_is_skipped_not_fatal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    make(tmp_path, "org--whisper", {"model.bin": "x", "vocabulary.json": "[]"})
+    monkeypatch.setattr(Path, "iterdir", untrusted_mount_point)
+    assert discover([tmp_path]) == []
+
+
+def test_a_size_that_cannot_be_measured_is_not_fatal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Faithful to the real failure: the directories are fine, and it is the linked
+    # files inside them that cannot be reached.
+    make(tmp_path, "org--whisper", {"model.bin": "x", "vocabulary.json": "[]"})
+    real_stat = Path.stat
+
+    def stat_unless_linked(self: Path, *args, **kwargs):
+        if self.suffix in {".bin", ".json"}:
+            untrusted_mount_point()
+        return real_stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", stat_unless_linked)
+    found = discover([tmp_path])
+    assert len(found) == 1
+    assert found[0].kind == STT_FASTER_WHISPER
+    assert found[0].size_bytes == 0
+
+
+def test_blobs_stand_in_when_the_snapshot_cannot_be_measured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The snapshot is the honest size, but it is made of links. When those cannot be
+    # followed it measures nothing, and the real bytes are in blobs beside it.
+    repo = tmp_path / "models--org--whisper"
+    snapshot = repo / "snapshots" / "abc"
+    snapshot.mkdir(parents=True)
+    (snapshot / "model.bin").write_text("x", encoding="utf-8")
+    (snapshot / "vocabulary.json").write_text("[]", encoding="utf-8")
+    blobs = repo / "blobs"
+    blobs.mkdir()
+    (blobs / "deadbeef").write_text("y" * 4096, encoding="utf-8")
+
+    real_stat = Path.stat
+
+    def stat_unless_linked(self: Path, *args, **kwargs):
+        if "snapshots" in self.parts and self.suffix:
+            untrusted_mount_point()
+        return real_stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", stat_unless_linked)
+    found = discover([tmp_path])
+    assert found[0].size_bytes >= 4096
+
+
+def test_a_readable_snapshot_is_measured_rather_than_every_revision(tmp_path: Path) -> None:
+    # blobs accumulates every revision ever downloaded; reporting that as "the size of
+    # this model" would roughly double it on a cache that has been updated once.
+    repo = tmp_path / "models--org--whisper"
+    snapshot = repo / "snapshots" / "abc"
+    snapshot.mkdir(parents=True)
+    (snapshot / "model.bin").write_text("x" * 100, encoding="utf-8")
+    (snapshot / "vocabulary.json").write_text("[]", encoding="utf-8")
+    blobs = repo / "blobs"
+    blobs.mkdir()
+    (blobs / "old-revision").write_text("y" * 9000, encoding="utf-8")
+    found = discover([tmp_path])
+    assert found[0].size_bytes < 1000

@@ -20,6 +20,7 @@ import sounddevice as sd
 from loguru import logger
 
 from voxflow.config import AppConfig
+from voxflow.fsprobe import is_file
 from voxflow.secrets import SecretStore
 from voxflow.text.cleanup import resolve_opencode_key
 
@@ -74,9 +75,9 @@ def plugin_state(source: Path | None = None, target: Path | None = None) -> str:
 
     source = source if source is not None else bundled_plugin()
     target = target if target is not None else plugin_target()
-    if not all((source / name).is_file() for name in PLUGIN_FILES):
+    if not all(is_file(source / name) for name in PLUGIN_FILES):
         return "unavailable"
-    if not all((target / name).is_file() for name in PLUGIN_FILES):
+    if not all(is_file(target / name) for name in PLUGIN_FILES):
         return "missing"
     try:
         same = all(
@@ -94,7 +95,7 @@ def install_plugin(source: Path | None = None, target: Path | None = None) -> Pa
 
     source = source if source is not None else bundled_plugin()
     target = target if target is not None else plugin_target()
-    if not all((source / name).is_file() for name in PLUGIN_FILES):
+    if not all(is_file(source / name) for name in PLUGIN_FILES):
         raise FileNotFoundError(f"Plugin não encontrado no pacote: {source}")
     target.mkdir(parents=True, exist_ok=True)
     for name in PLUGIN_FILES:
@@ -167,10 +168,10 @@ def check_requirements(
         title="Hermes",
         detail=(
             f"Encontrado em {executable}."
-            if executable.is_file()
+            if is_file(executable)
             else f"Não encontrado em {executable}. A Friday não abre sem ele."
         ),
-        ok=executable.is_file(),
+        ok=is_file(executable),
         optional=False,
     )
 

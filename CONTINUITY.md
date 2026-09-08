@@ -909,3 +909,62 @@ PowerShell. O primeiro uso real é o teste de verdade.
 
 Validação: Ruff aprovado, 163 testes aprovados, script validado pelo parser do
 PowerShell.
+
+## 0.7.10 — Correção: o app não abria (2026-09-07)
+
+A 0.7.9 instalada não iniciava. Erro na abertura:
+
+```
+OSError: [WinError 448] O caminho não pode ser atravessado porque contém um ponto
+de montagem não confiável:
+'...\.cache\huggingface\hub\models--...\snapshots\0a363e...\config.json'
+```
+
+### A causa
+
+O cache do HuggingFace preenche cada snapshot com **symlinks** para `blobs`. O
+aplicativo instalado nem sempre tem permissão para atravessá-los, e o `Path.is_file()`
+do pathlib **não engole** o WinError 448 — ele só ignora um conjunto fixo de erros, e
+esse não está nele. Eu chamei `is_file()` fora do `try` em `_read_config`, então a
+exceção subiu até `main`, e como a `SettingsWindow` é construída na abertura, o app
+inteiro morria antes de aparecer.
+
+**Isto já era conhecido no projeto.** `faster_whisper_local._materialize_symlinks`
+existe exatamente porque o app instalado não consegue seguir esses links — é por isso
+que existe a cópia em `%LOCALAPPDATA%\VoxFlow\models\large-v3-turbo`. Entrei direto na
+mesma armadilha ao escrever `models.py`, sem olhar por que aquela função existia.
+
+### A correção
+
+`src/voxflow/fsprobe.py` (novo): `is_file`, `is_dir` e `modified_at` que respondem
+"não" em vez de levantar. Toda sondagem de disco em `models.py` e `setup_check.py`
+passa por eles — nenhuma chamada crua sobrou.
+
+Além disso, duas redes de segurança, porque a lista de modelos é uma conveniência e
+nunca deve ser o motivo de o app não abrir:
+
+- `discover()` pula a pasta que falhar, registrando qual, em vez de abortar a varredura.
+- A chamada em `settings.py` e o `needs_setup` em `main.py` ficam dentro de `try`.
+
+Classificar continua funcionando no app instalado: os formatos são reconhecidos por
+**nomes de arquivo**, e listar uma pasta não exige seguir os links. Só `config.json`
+fica ilegível, e agora isso é dito — `"config.json ilegível (links do cache do
+HuggingFace)"` — em vez de virar "formato não reconhecido", que seria mentira.
+
+### Tamanho: dois erros no caminho
+
+Ao consertar, medi a pasta inteira do repositório e os tamanhos **dobraram**: `blobs`
+tem os bytes reais e `snapshots` tem links para os mesmos bytes. Trocar para só `blobs`
+também errava, porque ele acumula todas as revisões já baixadas (3,18 GB contra 1,62 GB
+do modelo em uso).
+
+Final: mede o snapshot, que é a revisão em uso; se vier zero — exatamente o caso em que
+os links não podem ser seguidos — recorre a `blobs`. Ambos têm teste.
+
+### Arquivos alterados
+
+`src/voxflow/fsprobe.py` (novo), `src/voxflow/models.py`, `src/voxflow/setup_check.py`,
+`src/voxflow/ui/settings.py`, `src/voxflow/main.py`, `tests/test_models.py`.
+
+Validação: Ruff aprovado, 170 testes aprovados (5 novos reproduzem o WinError 448),
+varredura real conferida com os tamanhos de volta aos valores corretos.
