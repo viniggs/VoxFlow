@@ -227,9 +227,18 @@ class ConversationOverlay(QWidget):
 
     toggle_requested = Signal()
     voice_changed = Signal(str)
+    #: ``continuous`` or ``push_to_talk``. It lived only in the settings window, which
+    #: is the wrong place for something you change mid-conversation because the room
+    #: got noisy — by the time the window is open, the moment has passed.
+    listen_mode_changed = Signal(str)
     settings_requested = Signal()
 
-    def __init__(self, voice: str, provider: str = "edge") -> None:
+    def __init__(
+        self,
+        voice: str,
+        provider: str = "edge",
+        listen_mode: str = "continuous",
+    ) -> None:
         super().__init__()
         self.setWindowTitle("VoxFlow — Friday")
         self.setWindowFlags(
@@ -284,9 +293,20 @@ class ConversationOverlay(QWidget):
 
         self._controls = QWidget()
         self._controls.setStyleSheet("background: transparent;")
-        controls_layout = QHBoxLayout(self._controls)
+        # Two rows, because one could not hold them: the panel is 470 px wide and the
+        # pickers plus the two buttons ask for 542. A single row would have clipped
+        # whatever came last instead of shrinking.
+        controls_outer = QVBoxLayout(self._controls)
+        controls_outer.setContentsMargins(0, 0, 0, 0)
+        controls_outer.setSpacing(8)
+        controls_layout = QHBoxLayout()
         controls_layout.setContentsMargins(0, 0, 0, 0)
         controls_layout.setSpacing(10)
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setContentsMargins(0, 0, 0, 0)
+        buttons_layout.setSpacing(10)
+        controls_outer.addLayout(controls_layout)
+        controls_outer.addLayout(buttons_layout)
         self._voice = QComboBox()
         self._voice.setFixedWidth(150)
         self._provider = provider
@@ -296,6 +316,13 @@ class ConversationOverlay(QWidget):
         if index >= 0:
             self._voice.setCurrentIndex(index)
         self._voice.currentIndexChanged.connect(self._emit_voice)
+        self._listen = QComboBox()
+        self._listen.setFixedWidth(132)
+        self._listen.addItem("Fala contínua", "continuous")
+        self._listen.addItem("Push-to-talk", "push_to_talk")
+        listen_index = self._listen.findData(listen_mode)
+        self._listen.setCurrentIndex(max(listen_index, 0))
+        self._listen.currentIndexChanged.connect(self._emit_listen_mode)
         settings_button = QPushButton("Ajustes")
         settings_button.setProperty("role", "ghost")
         settings_button.clicked.connect(self.settings_requested.emit)
@@ -304,9 +331,12 @@ class ConversationOverlay(QWidget):
         hide_button.clicked.connect(self.hide)
         controls_layout.addStretch(1)
         controls_layout.addWidget(self._voice)
-        controls_layout.addWidget(settings_button)
-        controls_layout.addWidget(hide_button)
+        controls_layout.addWidget(self._listen)
         controls_layout.addStretch(1)
+        buttons_layout.addStretch(1)
+        buttons_layout.addWidget(settings_button)
+        buttons_layout.addWidget(hide_button)
+        buttons_layout.addStretch(1)
         policy = self._controls.sizePolicy()
         policy.setRetainSizeWhenHidden(True)
         self._controls.setSizePolicy(policy)
@@ -425,6 +455,21 @@ class ConversationOverlay(QWidget):
         apply_native_window_effects(self, acrylic=False)
 
     # ------------------------------------------------------------- Internals
+
+    def set_listen_mode(self, mode: str) -> None:
+        """Reflect a mode chosen elsewhere, without echoing it back as a new choice."""
+
+        index = self._listen.findData(mode)
+        if index < 0 or index == self._listen.currentIndex():
+            return
+        blocked = self._listen.blockSignals(True)
+        self._listen.setCurrentIndex(index)
+        self._listen.blockSignals(blocked)
+
+    def _emit_listen_mode(self) -> None:
+        mode = self._listen.currentData()
+        if mode:
+            self.listen_mode_changed.emit(str(mode))
 
     def _emit_voice(self) -> None:
         voice = str(self._voice.currentData() or "").strip()

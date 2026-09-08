@@ -23,7 +23,9 @@ em `%LOCALAPPDATA%\VoxFlow\reasoning\stream.jsonl`. Sem ele o resto funciona igu
 plugin acompanha o VoxFlow: se não estiver instalado, o assistente de configuração
 oferece um botão para copiá-lo, e depois basta reiniciar o Hermes.
 
-Ela ouve de duas maneiras, escolhidas em Ajustes → Hermes → **Como ela ouve**:
+Ela ouve de duas maneiras, escolhidas **no painel dela**, na barra sob o orbe, ao lado
+do seletor de voz — e também em Ajustes → Hermes → **Como ela ouve**. Os dois lugares
+mostram sempre a mesma escolha:
 
 - **Fala contínua** — ela escuta sozinha e o silêncio encerra cada turno. Falar por
   cima interrompe.

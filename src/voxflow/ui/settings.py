@@ -600,6 +600,18 @@ class SettingsWindow(CosmicPanel):
         if voice:
             self.voice_changed.emit(voice)
 
+    def set_hermes_listen_mode(self, mode: str) -> None:
+        """Take the mode chosen on Friday's own panel and persist it.
+
+        Same round trip the voice already uses: the panel is where the choice is made,
+        this window is where it is written down."""
+
+        index = self._listen_mode.findData(mode)
+        if index < 0:
+            return
+        self._listen_mode.setCurrentIndex(index)
+        self.save(show_dialog=False)
+
     def set_hermes_voice(self, voice: str) -> None:
         index = self._tts_voice.findData(voice)
         if index >= 0:

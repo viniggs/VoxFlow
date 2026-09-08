@@ -1332,3 +1332,58 @@ passado por `providers()`, `available()`, `_kokoro_available()` e `_kokoro_detai
 
 Validação: Ruff aprovado, 233 testes aprovados, sonda medida no executável empacotado e
 o teste novo exercitado contra o defeito para confirmar que ele reprova.
+
+## O realce que corria na frente, e o modo de escuta no painel (2026-09-08)
+
+Dois pedidos do usuário: o realce cor-de-rosa das palavras estava "completamente
+dessincronizado", e o modo push-to-talk parecia não existir.
+
+### O realce: quatro medições até achar o culpado
+
+O usuário chutou que era bug do app e não do Kokoro, e estava certo. Três suspeitos
+foram descartados por medição, nesta ordem:
+
+| Suspeito | Medição | Veredito |
+|---|---|---|
+| Silêncio nas pontas do clipe do Kokoro | 30 ms na frente, 60 ms atrás — 2,0% | inocente |
+| Timings reais do Kokoro (`create_timed`) | `has_timings=False`; este export ONNX não publica durações | indisponível |
+| O estimador proporcional | erro máximo de 140 ms contra a duração real de cada palavra sintetizada isolada | não explica |
+| Posição reportada pelo MCI | `time format=milliseconds` e posição fiel ao relógio, tanto em WAV quanto em MP3 | inocente |
+
+O culpado estava no último elo. O laço de reprodução amostra a cada 40 ms e chamava
+`_on_speech` com o **texto** da palavra em cada amostra. `Bubble.highlight_word` procura
+a **próxima** ocorrência a partir do cursor — então uma palavra de 200 ms era anunciada
+cinco vezes e o realce pulava para os cinco "a" seguintes do parágrafo. Em português,
+com "a", "de", "que", "e", ele disparava na frente da voz. Reproduzido em três linhas:
+`highlight_word("a")` três vezes seguidas caminhou de `[0:1]` para `[19:20]` e `[34:35]`.
+
+Isso nunca dependeu do Kokoro: valia igual no Edge. O que mudou foi o usuário reparar.
+
+`SpeechCursor` (novo, em `hermes/tts.py`) anuncia a palavra uma vez por **índice**, não
+por texto — assim uma frase que repete a mesma palavra ainda avança na segunda. A
+amplitude continua saindo a cada amostra, para o orbe não perder o envelope.
+
+### O modo de escuta estava pronto, no lugar errado
+
+A funcionalidade existe desde a 0.7.6: `hermes.listen_mode` em `push_to_talk` faz
+`_hermes_tick` retornar antes de consultar o detector de voz, inclusive o de barge-in —
+o microfone deixa de abrir turno sozinho e a tecla passa a ser a única forma de falar.
+O que faltava era o controle **onde o usuário procurou**: a barra sob o orbe, ao lado do
+seletor de voz. Ele olhou lá, não achou, e concluiu que nada tinha sido feito.
+
+Agora o seletor está nos dois lugares, com a mesma volta que a voz já usava: o painel
+emite, a janela de Ajustes salva, e o `saved` devolve a escolha ao painel. `apply_config`
+já troca o `config` vivo, então vale sem reiniciar.
+
+**Os controles não cabiam em uma linha.** Medido: dois seletores e dois botões pedem
+542 px num painel de 470, e as larguras são fixas, então o último seria cortado em vez
+de encolher. Passaram a duas linhas — seletores em cima, botões embaixo — 292×66.
+
+### Arquivos alterados
+
+`src/voxflow/hermes/tts.py`, `src/voxflow/ui/conversation.py`,
+`src/voxflow/ui/settings.py`, `src/voxflow/main.py`, `README.md`,
+`tests/test_speech_sync.py`, `tests/test_listen_mode_panel.py` (novo).
+
+Validação: Ruff aprovado, 241 testes aprovados, painel renderizado com os controles
+cabendo, e o teste do realce exercitado contra o defeito para confirmar que reprova.

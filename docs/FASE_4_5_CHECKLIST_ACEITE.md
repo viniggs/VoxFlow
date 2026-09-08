@@ -505,3 +505,31 @@ sair com documentação desatualizada, mais as correções que ele apontou.
   na interface.
 - [ ] Ler a seção **A voz da Friday** no README e confirmar que o Kokoro está lá.
 - [ ] Confirmar no README que clicar no ícone com o app aberto traz a janela de volta.
+
+---
+
+# VoxFlow 0.7.15+ — Realce sincronizado e modo de escuta no painel
+
+Data: 2026-09-08
+
+## O realce das palavras
+
+- [ ] Falar com a Friday e acompanhar o rosa: ele deve andar **junto** com a voz, uma
+  palavra de cada vez, sem correr na frente.
+- [ ] Repetir com uma resposta longa, cheia de "a", "de", "que" — era exatamente aí que
+  ele disparava para a frente.
+- [ ] Trocar a voz para o **Edge** e conferir que continua certo (o defeito valia para
+  os dois; o Edge só o disfarçava menos).
+
+## O modo de escuta no painel da Friday
+
+- [ ] Abrir a Friday (`F8`, na tua configuração) e clicar no orbe para revelar os
+  controles: agora há **duas linhas** — voz e modo em cima, Ajustes e Ocultar embaixo.
+- [ ] Confirmar que nenhum controle aparece cortado.
+- [ ] Escolher **Push-to-talk** e confirmar que ela **para de abrir turno sozinha**:
+  falar perto do microfone sem segurar a tecla não deve iniciar nada.
+- [ ] Segurar `Ctrl + Numpad *` (a tua tecla de fala), falar, soltar — o turno deve ir.
+- [ ] Voltar para **Fala contínua** e confirmar que ela volta a ouvir sozinha.
+- [ ] Abrir Ajustes → Hermes e confirmar que **Como ela ouve** mostra a mesma escolha
+  feita no painel; mudar lá e confirmar que o painel acompanha.
+- [ ] Confirmar que a troca vale **sem reiniciar** o VoxFlow.

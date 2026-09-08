@@ -70,6 +70,48 @@ def clean_spoken_text(text: str) -> str:
     return " ".join(text.split()).strip()
 
 
+def word_index_at(words: list[WordTiming], position_ms: float) -> int:
+    """Which word is being spoken at ``position_ms``, or ``-1`` for none."""
+
+    if not words:
+        return -1
+    starts = [word[0] for word in words]
+    index = bisect.bisect_right(starts, position_ms) - 1
+    if index < 0:
+        return -1
+    start, duration, _ = words[index]
+    if duration <= 0 or position_ms > start + duration:
+        return -1
+    return index
+
+
+class SpeechCursor:
+    """Turns polled playback positions into one announcement per spoken word.
+
+    The playback loop samples every 40 ms, so a word lasting 200 ms is seen five
+    times. Sending its text on every sample made the highlight scan forward five
+    times, and since it scans for the *next* occurrence, each repeat landed on the
+    following "a", "de" or "que" further down the text. The highlight ran ahead of
+    the voice, and the more common the word the faster it ran — which is why it
+    looked like the timings were wrong when the timings were fine.
+
+    The word is named when the *index* changes, not the text, so a sentence that
+    genuinely repeats a word still advances on the second one.
+    """
+
+    def __init__(self) -> None:
+        self._index = -1
+
+    def update(self, words: list[WordTiming], position_ms: float) -> tuple[float, str]:
+        """``(amplitude, word)``, the word empty unless it just changed."""
+
+        amplitude, text = speech_envelope(words, position_ms)
+        index = word_index_at(words, position_ms)
+        fresh = text if index != self._index else ""
+        self._index = index
+        return amplitude, fresh
+
+
 def speech_envelope(words: list[WordTiming], position_ms: float) -> tuple[float, str]:
     """Return the ``(amplitude, word)`` being spoken at ``position_ms``.
 
@@ -259,7 +301,7 @@ class SentenceSpeaker:
         words: list[WordTiming],
     ) -> None:
         started = time.perf_counter()
-        last_word = ""
+        cursor = SpeechCursor()
         try:
             self._mci(f'open "{path}" type mpegvideo alias {self._alias}', raise_on_error=True)
             if not words:
@@ -284,10 +326,8 @@ class SentenceSpeaker:
                 with self._lock:
                     if generation != self._generation:
                         break
-                amplitude, word = speech_envelope(words, self._playback_position_ms(started))
-                if word != last_word or amplitude > 0.0:
-                    self._on_speech(amplitude, word)
-                    last_word = word
+                amplitude, word = cursor.update(words, self._playback_position_ms(started))
+                self._on_speech(amplitude, word)
                 time.sleep(0.04)
             logger.info(
                 "tts_sentence_completed elapsed_ms={:.2f} chars={} words={}",

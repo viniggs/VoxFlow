@@ -84,7 +84,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     overlay = DictationOverlay()
     history_window = HistoryWindow(history_store)
     settings_window = SettingsWindow(config, paths)
-    conversation = ConversationOverlay(config.hermes.tts.voice, config.hermes.tts.provider)
+    conversation = ConversationOverlay(
+        config.hermes.tts.voice, config.hermes.tts.provider, config.hermes.listen_mode
+    )
     reasoning = ReasoningStream(default_directory(), config.hermes.conversation_id)
     reasoning.block_started.connect(conversation.begin_thinking)
     reasoning.delta.connect(conversation.append_thinking)
@@ -114,6 +116,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     settings_window.saved.connect(
         lambda saved: conversation.set_provider(saved.hermes.tts.provider, saved.hermes.tts.voice)
     )
+    # Changing the mode in the settings window must move the panel's box too, or the
+    # two would disagree about something the user can see in both places.
+    settings_window.saved.connect(
+        lambda saved: conversation.set_listen_mode(saved.hermes.listen_mode)
+    )
     controller.signals.recording_level_changed.connect(settings_window.feed_microphone)
     settings_window.history_requested.connect(history_window.show_and_refresh)
     settings_window.hermes_action_requested.connect(controller.request_hermes_action)
@@ -130,6 +137,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     conversation.toggle_requested.connect(controller.toggle_hermes)
     conversation.voice_changed.connect(settings_window.set_hermes_voice)
+    conversation.listen_mode_changed.connect(settings_window.set_hermes_listen_mode)
     conversation.settings_requested.connect(lambda: settings_window.show_tab("Hermes"))
     window.history_requested.connect(history_window.show_and_refresh)
     window.settings_requested.connect(lambda: settings_window.show_tab("Geral"))
