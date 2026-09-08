@@ -396,3 +396,39 @@ Data: 2026-09-07
   que o app instalado não conseguiu seguir os links daquele modelo, e ele foi reportado
   em vez de escondido.
 - [ ] Ditar e falar com a Friday, confirmando que nada mais regrediu.
+
+---
+
+# VoxFlow 0.7.12 — A API local do Hermes
+
+Data: 2026-09-08
+
+## Na sua máquina (tudo já configurado)
+
+- [ ] Abrir o app e confirmar que o assistente **não aparece** — as seis verificações
+  passam, incluindo as duas novas.
+- [ ] Se aparecer, ler o que ele diz sobre `API local do Hermes` e `Chave da API`.
+
+## Simulando o computador do amigo
+
+- [ ] Editar `%APPDATA%\VoxFlow\config.yaml` e trocar a porta do `hermes.base_url` para
+  uma que não existe (por exemplo `8643`). Abrir o app: o assistente deve aparecer
+  dizendo que o Hermes serve em `127.0.0.1:8642` e o VoxFlow aponta para outro lugar.
+- [ ] Clicar em **Usar 127.0.0.1:8642** e confirmar que a linha vira ✓ e que a Friday
+  volta a funcionar.
+- [ ] Renomear temporariamente o `config.yaml` do Hermes e derrubar o gateway
+  (`hermes gateway stop`). Abrir o app: o assistente deve dizer que não conseguiu ler a
+  configuração dele.
+
+## A chave
+
+- [ ] Em Ajustes → Hermes, apagar a chave guardada (ou trocá-la por algo errado).
+  Reabrir o app e confirmar que o assistente diz que ela **difere** da que o Hermes
+  espera — e não apenas que está ausente.
+- [ ] Clicar em **Importar do Hermes** e confirmar que a linha vira ✓ e a Friday volta
+  a responder.
+
+## O que continua manual
+
+- [ ] Confirmar que o assistente **não edita** o `config.yaml` do Hermes em nenhum caso,
+  só instrui. Ligar `API_SERVER_ENABLED: true` é uma ação sua, por decisão de projeto.

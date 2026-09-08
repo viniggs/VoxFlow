@@ -1013,3 +1013,60 @@ acrescentar uma seção nova.
 ### Arquivos alterados
 
 `PROMPT_INICIALIZACAO_PROXIMA_IA.md`, `README.md`.
+
+## 0.7.12 — A API local do Hermes precisa estar ligada (2026-09-08)
+
+O usuário perguntou se a porta 8642 abre sozinha no computador do amigo. Não abre, e o
+assistente de 0.7.5 não checava nada disso — ele conferia só se o `hermes.exe` existia,
+e mostrava um ✓ verde que dava **falsa confiança**.
+
+### Três coisas que estavam invisíveis
+
+Na máquina de origem tudo isso foi configurado à mão há muito tempo:
+
+1. `API_SERVER_ENABLED: true` no `config.yaml` do Hermes (chave de topo). Numa
+   instalação nova simplesmente não existe, e sem ela `hermes gateway run` não abre
+   porta nenhuma.
+2. `API_SERVER_HOST` / `API_SERVER_PORT` — configuráveis, e precisam bater com
+   `hermes.base_url` do VoxFlow.
+3. `API_SERVER_KEY` no `.env` do Hermes. O VoxFlow manda `Authorization: Bearer` a
+   partir do segredo `hermes`; se não bater, o gateway recusa.
+
+Sem os três, o sintoma é "Hermes não respondeu após 60 segundos" — que não diz nada
+sobre a causa.
+
+### O que foi feito
+
+`src/voxflow/hermes/local_api.py` (novo) lê a configuração do Hermes, **somente leitura
+e de propósito**: a configuração é de outro aplicativo. Já houve o episódio de eu
+escrever `model.reasoning_echo` no `config.yaml` dele e ter que reverter; a lição
+valeu. Aqui a API desligada é *reportada com a linha exata a mudar*, não corrigida por
+baixo do pano.
+
+Dois requisitos novos no assistente:
+
+- `hermes_api` — porta respondendo agora, ou configuração habilitada e coerente. Um
+  gateway que responde é a verdade final e encerra a questão, mesmo com a configuração
+  dizendo o contrário.
+- `hermes_key` — a chave guardada tem que ser a mesma que o Hermes espera. Chave
+  divergente é reportada diferente de chave ausente: as causas são outras.
+
+Reparos oferecidos: **Usar `<host:porta>`** move o `base_url` do VoxFlow para o endereço
+que o Hermes serve, e **Importar do Hermes** copia a `API_SERVER_KEY` do `.env` dele
+para o Gerenciador de Credenciais. Os dois arquivos são da mesma máquina e do mesmo
+usuário, e o segredo só se move para onde o VoxFlow guarda segredos — mesma prática que
+`resolve_opencode_key` já usava.
+
+Detalhes de cuidado: as chaves são casadas em **coluna zero** (`^API_SERVER_ENABLED:`),
+porque o `config.yaml` do usuário tem centenas de linhas e uma chave aninhada de mesmo
+nome não pode ser confundida. Ausente é lido como `None`, nunca como ligado. E o valor
+da chave nunca é registrado em log — só a sua presença.
+
+### Arquivos alterados
+
+`src/voxflow/hermes/local_api.py` (novo), `src/voxflow/setup_check.py`,
+`src/voxflow/ui/setup_wizard.py`, `tests/test_local_api.py` (novo).
+
+Validação: Ruff aprovado, 185 testes aprovados, e o caso do amigo simulado numa máquina
+falsa — Hermes instalado com a API desligada produz exatamente o aviso com a linha a
+corrigir.

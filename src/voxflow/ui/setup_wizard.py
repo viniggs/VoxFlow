@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from voxflow.config import AppConfig, save_config
+from voxflow.hermes import local_api
 from voxflow.paths import AppPaths
 from voxflow.secrets import SecretStore
 from voxflow.setup_check import (
@@ -176,6 +177,19 @@ class SetupWizard(CosmicPanel):
             box.setCurrentText(match if match is not None else names[0])
             self._device_box = box
             return [box]
+        if requirement.key == "hermes_api" and not requirement.ok:
+            settings = local_api.read()
+            if settings.port and not local_api.matches(settings, self._config.hermes.base_url):
+                button = QPushButton(f"Usar {settings.address}")
+                button.clicked.connect(self._align_base_url)
+                return [button]
+            return []
+        if requirement.key == "hermes_key" and not requirement.ok:
+            if not local_api.api_key():
+                return []
+            button = QPushButton("Importar do Hermes")
+            button.clicked.connect(self._import_hermes_key)
+            return [button]
         if requirement.key == "opencode_key" and not requirement.ok:
             field = QLineEdit()
             field.setPlaceholderText("Cole a chave do opencode (opcional)")
@@ -202,6 +216,32 @@ class SetupWizard(CosmicPanel):
         save_config(self._config, self._paths)
         logger.info("setup_hermes_path_chosen")
         self.refresh("Caminho do Hermes salvo.")
+
+    def _align_base_url(self) -> None:
+        """Point VoxFlow at the address Hermes was actually told to serve."""
+
+        settings = local_api.read()
+        if not settings.port:
+            return
+        self._config.hermes.base_url = local_api.base_url_for(
+            settings, self._config.hermes.base_url
+        )
+        save_config(self._config, self._paths)
+        logger.info("setup_base_url_aligned address={}", settings.address)
+        self.refresh(f"VoxFlow agora aponta para {settings.address}.")
+
+    def _import_hermes_key(self) -> None:
+        """Copy the key Hermes expects into the Windows Credential Manager.
+
+        Both files are on this machine and belong to this user; the value only moves
+        from Hermes' own environment file into the store VoxFlow reads secrets from."""
+
+        key = local_api.api_key()
+        if not key:
+            return
+        self._secrets.set("hermes", key)
+        logger.info("setup_hermes_key_imported")
+        self.refresh("Chave do Hermes importada para o Gerenciador de Credenciais.")
 
     def _install_plugin(self) -> None:
         try:

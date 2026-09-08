@@ -259,3 +259,25 @@ conversa ao vivo.
 Fase 4 e 4.5 seguem **pendentes de aceite do usuário**, acumulando de 0.7.0 a 0.7.10.
 A Fase 5 (comandos de voz de estudo, screenshot para o Hermes, log Markdown por sessão,
 resumo ao fechar) está explicitamente travada esperando liberação — não comece sem ela.
+
+## A porta 8642 não abre sozinha (0.7.12)
+
+Ter o Hermes instalado não é ter a API local dele no ar. Três coisas, todas configuradas
+à mão na máquina de origem e ausentes em qualquer outra:
+
+1. `API_SERVER_ENABLED: true` — chave **de topo** no `config.yaml` do Hermes. Ausente
+   numa instalação nova, e sem ela `hermes gateway run` não abre porta.
+2. `API_SERVER_HOST` / `API_SERVER_PORT` — precisam bater com `hermes.base_url`.
+3. `API_SERVER_KEY` no `.env` do Hermes — o VoxFlow manda `Authorization: Bearer` a
+   partir do segredo `hermes`.
+
+Sem eles o sintoma é "Hermes não respondeu após 60 segundos", que não diz a causa.
+`src/voxflow/hermes/local_api.py` lê isso e o assistente reporta.
+
+**Somente leitura, e isso é regra.** A configuração é de outro aplicativo. Já houve o
+episódio de escrever `model.reasoning_echo` no `config.yaml` do Hermes e ter que
+reverter. Reporte a linha exata a mudar; não edite.
+
+Ao ler aquele arquivo, case as chaves em coluna zero — o `config.yaml` do usuário tem
+centenas de linhas e uma chave aninhada de mesmo nome não pode ser confundida. E chave
+ausente é `None`, nunca "ligado".

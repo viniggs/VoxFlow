@@ -21,6 +21,8 @@ from loguru import logger
 
 from voxflow.config import AppConfig
 from voxflow.fsprobe import is_file
+from voxflow.hermes import local_api
+from voxflow.hermes.gateway import gateway_reachable
 from voxflow.secrets import SecretStore
 from voxflow.text.cleanup import resolve_opencode_key
 
@@ -119,6 +121,96 @@ def input_devices(query_devices: Callable[[], Any] = sd.query_devices) -> list[s
     return names
 
 
+def _address(base_url: str) -> str:
+    host, port = local_api.configured_address(base_url)
+    return f"{host}:{port}"
+
+
+def _local_api_requirement(config: AppConfig) -> Requirement:
+    """Having Hermes installed is not the same as having its local API open.
+
+    The port is off in a fresh Hermes and has to be turned on in its own configuration.
+    Checking only for the executable made this requirement invisible, and the
+    conversation would simply never start on another machine."""
+
+    base_url = config.hermes.base_url
+    if gateway_reachable(base_url):
+        return Requirement(
+            key="hermes_api",
+            title="API local do Hermes",
+            detail=f"Respondendo em {_address(base_url)}.",
+            ok=True,
+            optional=False,
+        )
+    settings = local_api.read()
+    if not settings.config_found:
+        detail = (
+            "Não foi possível ler a configuração do Hermes para saber se a API local "
+            "está habilitada."
+        )
+    elif settings.enabled is None or not settings.enabled:
+        detail = (
+            "Desligada na configuração do Hermes. Abra o config.yaml dele e defina "
+            "API_SERVER_ENABLED: true (com API_SERVER_HOST e API_SERVER_PORT)."
+        )
+    elif not local_api.matches(settings, base_url):
+        detail = (
+            f"O Hermes serve em {settings.address}, mas o VoxFlow está apontado "
+            f"para {_address(base_url)}."
+        )
+    else:
+        detail = "Habilitada, mas não está no ar agora. O VoxFlow a inicia quando precisar."
+        return Requirement(
+            key="hermes_api",
+            title="API local do Hermes",
+            detail=detail,
+            ok=True,
+            optional=False,
+        )
+    return Requirement(
+        key="hermes_api",
+        title="API local do Hermes",
+        detail=detail,
+        ok=False,
+        optional=False,
+    )
+
+
+def _api_key_requirement(config: AppConfig, secrets: SecretStore) -> Requirement:
+    """The gateway can demand a key, and then VoxFlow needs the very same one."""
+
+    del config
+    expected = local_api.api_key()
+    stored = secrets.get("hermes") or ""
+    if not expected:
+        return Requirement(
+            key="hermes_key",
+            title="Chave da API do Hermes",
+            detail="O Hermes não exige chave nesta máquina.",
+            ok=True,
+            optional=True,
+        )
+    if stored == expected:
+        return Requirement(
+            key="hermes_key",
+            title="Chave da API do Hermes",
+            detail="Guardada e igual à do Hermes.",
+            ok=True,
+            optional=False,
+        )
+    return Requirement(
+        key="hermes_key",
+        title="Chave da API do Hermes",
+        detail=(
+            "Diferente da que o Hermes espera."
+            if stored
+            else "O Hermes exige uma chave e o VoxFlow ainda não tem."
+        ),
+        ok=False,
+        optional=False,
+    )
+
+
 def _microphone_requirement(config: AppConfig, names: list[str]) -> Requirement:
     requested = config.audio.input_device.strip()
     if not names:
@@ -190,6 +282,8 @@ def check_requirements(
         optional=True,
     )
 
+    api = _local_api_requirement(config)
+    key = _api_key_requirement(config, secrets or SecretStore())
     microphone = _microphone_requirement(config, input_devices(query_devices))
 
     has_key = bool(resolve_opencode_key(secrets or SecretStore()))
@@ -205,7 +299,7 @@ def check_requirements(
         optional=True,
     )
 
-    return [hermes, plugin, microphone, cleanup]
+    return [hermes, api, key, plugin, microphone, cleanup]
 
 
 def missing_keys(requirements: list[Requirement]) -> set[str]:
