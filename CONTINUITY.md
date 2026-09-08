@@ -1181,3 +1181,51 @@ agora recebe o locale no nome; os demais ficam limpos.
 
 Validação: Ruff aprovado, 222 testes aprovados, catálogo real buscado (322 vozes, 14 que
 falam português, 142 idiomas) e a aba Hermes renderizada com a linha de idioma.
+
+## 0.7.15 — Um guarda para a documentação não ficar para trás (2026-09-08)
+
+O usuário cobrou pela segunda vez que os documentos estavam desatualizados, e estava
+certo: eu tinha corrigido isso na 0.7.11 e **falhei de novo** nas 0.7.13 e 0.7.14.
+Prometer atenção não resolveu, então agora falha em teste.
+
+### O que estava errado desta vez
+
+| Onde | Problema |
+|---|---|
+| `PROMPT_INICIALIZACAO_PROXIMA_IA.md` | Parou na 0.7.12; faltavam 0.7.13 e 0.7.14 |
+| idem | Anunciava "A versão atual é 0.7.10" |
+| idem | Nenhuma menção ao Kokoro, um provider que funciona |
+| `README.md` | Nenhuma menção ao Kokoro |
+| idem | Dizia que o OpenAI "aparece marcado como indisponível" — desde a 0.7.13 ele diz "falta configurar", que é outra coisa |
+| idem | Nada sobre clicar no ícone trazer a janela de volta |
+
+### O guarda
+
+`tests/test_documentation.py` falha quando:
+
+- `CONTINUITY.md` não tem seção para a versão atual;
+- o checklist de aceite não tem seção para a versão atual — mesmo uma entrega sem nada
+  a testar precisa dizer isso, em vez de ficar ausente e indistinguível de esquecimento;
+- o prompt da próxima IA não anuncia a versão atual;
+- um provider de voz que **funciona** não aparece no README (casado pelo rótulo que o
+  usuário vê, não pelo nome interno — ninguém procuraria por "sapi" no README);
+- uma afirmação que já ficou obsoleta uma vez reaparece (`~/.hermes/plugins/`,
+  `ainda sem commit`, `coexistem de propósito`, `hands-free`).
+
+`build-release.ps1` roda os testes antes de empacotar, então **não é possível gerar
+instalador com documentação velha**. Verificado na prática: subi a versão para 0.7.99 de
+mentira e os três documentos falharam com a mensagem certa.
+
+### Por que só agora
+
+CONTINUITY e checklist eu atualizava porque são **registro de entrega** — acrescentar
+seção é natural. O prompt e o README descrevem o **estado atual**, então cada mudança de
+comportamento os tornava falsos em silêncio: nada quebrava, o texto só passava a mentir.
+Era um erro de processo, não de intenção, e por isso disciplina não bastou.
+
+### Arquivos alterados
+
+`tests/test_documentation.py` (novo), `PROMPT_INICIALIZACAO_PROXIMA_IA.md`, `README.md`.
+
+Validação: Ruff aprovado, 227 testes aprovados, e o guarda exercitado contra uma versão
+falsa para confirmar que ele realmente reprova.

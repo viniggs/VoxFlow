@@ -491,3 +491,17 @@ Data: 2026-09-08
   grupo português, e não as 322.
 - [ ] Escolher uma voz de outro idioma em Ajustes, salvar, fechar e reabrir Ajustes:
   confirmar que a linha de idioma **abre no idioma daquela voz**, e não no padrão.
+
+---
+
+# VoxFlow 0.7.15 — Guarda da documentação
+
+Data: 2026-09-08
+
+Entrega sem mudança de comportamento no aplicativo: é um teste que impede o build de
+sair com documentação desatualizada, mais as correções que ele apontou.
+
+- [ ] Confirmar que o aplicativo continua funcionando igual à 0.7.14 — não há nada novo
+  na interface.
+- [ ] Ler a seção **A voz da Friday** no README e confirmar que o Kokoro está lá.
+- [ ] Confirmar no README que clicar no ícone com o app aberto traz a janela de volta.

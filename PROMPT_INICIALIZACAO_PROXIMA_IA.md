@@ -36,7 +36,7 @@ aqui significa apenas o preview na UI: nunca injete parciais no Notepad, Chrome 
 aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa visibilidade em
 todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco horas é crítico.
 
-A versão atual é **0.7.10**/Fase 4.5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
+A versão atual é **0.7.15**/Fase 4.5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
 SSE, painel de resposta, TTS por sentença, barge-in, half-duplex e controles de
 health/start/stop. Desde então mudaram coisas que as seções no fim deste arquivo
 detalham — leia-as antes de confiar em qualquer parágrafo anterior a elas.
@@ -281,3 +281,63 @@ reverter. Reporte a linha exata a mudar; não edite.
 Ao ler aquele arquivo, case as chaves em coluna zero — o `config.yaml` do usuário tem
 centenas de linhas e uma chave aninhada de mesmo nome não pode ser confundida. E chave
 ausente é `None`, nunca "ligado".
+
+## Vozes locais e o que empacotar (0.7.13)
+
+O Kokoro fala português offline: ~1,7 s na primeira frase (carga do modelo) e ~400 ms
+nas seguintes. Ele chegou com três defeitos que valem como aviso permanente:
+
+- **Nunca escreva um caminho absoluto com nome de usuário no fonte.** Havia
+  `C:\Users\<nome>\.cache\...` gravado no código. Use `models.default_roots()`.
+  `tests/test_kokoro.py` falha se um caminho de home voltar ao módulo.
+- **Nunca instale dependência só no venv.** `build-release.ps1` começa com `uv sync`,
+  que **remove** o que não está no `pyproject.toml`. O extra é `kokoro`, e o script
+  precisa do `--extra kokoro`.
+- **`available()` não pode ser caro.** A janela de Ajustes pergunta enquanto é montada,
+  ou seja, na abertura. A sonda do Kokoro procura arquivos: 0,9 ms. Havia uma versão que
+  carregava o ONNX inteiro ali.
+
+E o que realmente quebrava não era nenhum dos três: `kokoro_onnx` lê o próprio
+`config.json` em tempo de execução, e o spec não coletava esse dado. **Funcionava pelo
+código-fonte e falhava só empacotado.** Ao adicionar qualquer biblioteca com arquivos de
+dados, acrescente `collect_data_files` e teste o aplicativo instalado, não só o fonte.
+
+### A janela que não voltava
+
+Clicar no ícone com o aplicativo rodando não fazia nada: a segunda execução via o mutex
+e retornava calada, enquanto a primeira estava numa bandeja que o Windows 11 esconde por
+padrão. Existe agora um evento nomeado `SHOW`, irmão do `QUIT`, consumido uma vez por
+pedido para a janela subir uma vez e não a cada tique.
+
+### "Indisponível" dizia duas coisas
+
+`Provider.status` separa `ready`, `needs_setup` (falta configurar nesta máquina) e
+`not_implemented` (não existe código). O usuário leu "indisponível" no Chatterbox e
+concluiu que faltava algo na máquina dele, quando faltava o código.
+
+## O catálogo de vozes do Edge (0.7.14)
+
+São 322 vozes em 75 idiomas, buscadas na Microsoft e guardadas em
+`%LOCALAPPDATA%\VoxFlow\edge-voices.json`. **Nunca busque na thread do Qt** — é um segundo
+de janela congelada; a busca vai para um executor e volta por sinal.
+
+A lista abre nas 14 que falam português: as `pt-BR` **mais todas as multilíngues**, que
+falam português independentemente do locale delas. As de Portugal ficam fora por pedido
+explícito do usuário. Não mude esse agrupamento sem perguntar.
+
+**Lição que custou caro:** as oito vozes anteriores foram escritas à mão, e uma delas
+(`pt-BR-ThalitaNeural`) **não existia** — escolhê-la falhava na síntese sem explicação.
+Não escreva identificadores de catálogo de memória; busque-os.
+
+## Os documentos não podem ficar para trás
+
+`tests/test_documentation.py` falha quando `CONTINUITY.md`, o checklist ou este arquivo
+não mencionam a versão atual, e quando um provider de voz que funciona não está no
+README. O `build-release.ps1` roda os testes antes de empacotar, então **não é possível
+gerar instalador com documentação velha**.
+
+Isso existe porque esquecer virou hábito, e o usuário cobrou mais de uma vez. CONTINUITY
+e checklist eram atualizados por serem registro de entrega, enquanto este arquivo e o
+README descrevem o presente — e toda mudança de comportamento os tornava falsos sem nada
+falhar. Se você criar outro documento que descreva o estado atual, acrescente-o a esse
+teste.

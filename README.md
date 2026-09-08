@@ -13,6 +13,10 @@ o texto final é inserido no aplicativo ativo depois que o atalho é solto.
 Pressione `F9` para entrar no modo Hermes. O painel mostra o que ela está pensando
 enquanto pensa, e a resposta conforme ela chega.
 
+O VoxFlow fica na bandeja do sistema, que o Windows 11 esconde por padrão. Clicar no
+ícone dele com o aplicativo já aberto **traz a janela para a frente** em vez de abrir
+uma segunda cópia.
+
 O pensamento depende de um plugin instalado no Hermes, em
 `%LOCALAPPDATA%\hermes\plugins\voxflow-reasoning\`, que escreve os deltas de raciocínio
 em `%LOCALAPPDATA%\VoxFlow\reasoning\stream.jsonl`. Sem ele o resto funciona igual. O
@@ -55,11 +59,16 @@ Em Ajustes → Hermes → **Provider TTS**:
   idiomas**, buscadas na Microsoft e guardadas em cache. A lista abre nas 14 que falam
   português (as brasileiras e todas as multilíngues); **Idioma da voz** alcança o resto,
   e **Atualizar vozes** rebusca o catálogo.
+- **Kokoro** — voz local, offline, em português do Brasil (Dora, Alex, Santa). Roda na
+  sua máquina: a primeira frase leva cerca de um segundo e meio, carregando o modelo, e
+  as seguintes saem em torno de 400 ms. Precisa do modelo baixado; a tela diz se falta.
 - **Windows (offline)** — usa as vozes que já existem no seu Windows. Não depende de
   rede e responde mais rápido que o Edge.
-- **OpenAI** — exige uma chave guardada nos segredos; enquanto não houver, aparece
-  marcado como indisponível.
-- **Chatterbox** — ainda não integrado, e o motivo aparece na própria tela.
+- **OpenAI** — exige uma chave guardada nos segredos.
+- **Chatterbox** — ainda não implementado.
+
+O dropdown distingue os dois motivos de um provider não estar disponível: *"falta
+configurar"* é coisa da sua máquina, *"ainda não implementado"* é código que não existe.
 
 A lista de vozes é sempre a do provider escolhido: um nome do Edge não significa nada
 para o Windows. Trocar de provider reconstrói a lista tanto em Ajustes quanto na barra
