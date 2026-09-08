@@ -182,13 +182,20 @@ def default_voice(provider: str) -> str:
     return options[0].identifier if options else ""
 
 
-def providers(*, secrets: SecretStore | None = None) -> list[Provider]:
-    """Every provider, and whether this machine can actually run it."""
+def providers(
+    *, secrets: SecretStore | None = None, kokoro_path: str = ""
+) -> list[Provider]:
+    """Every provider, and whether this machine can actually run it.
+
+    ``kokoro_path`` is the folder the user pointed at in the settings. Without it the
+    probe searched only the default caches, so a model kept anywhere else was reported
+    as missing while the synthesizer would have loaded it perfectly well.
+    """
 
     store = secrets or SecretStore()
 
     windows_voices = sapi_voices()
-    kokoro_ready = _kokoro_available()
+    kokoro_ready = _kokoro_available(kokoro_path)
     has_openai_key = bool(store.get("openai"))
 
     return [
@@ -203,7 +210,7 @@ def providers(*, secrets: SecretStore | None = None) -> list[Provider]:
             KOKORO,
             "Kokoro (local, PT-BR)",
             kokoro_ready,
-            _kokoro_detail(),
+            _kokoro_detail(kokoro_path),
             READY if kokoro_ready else NEEDS_SETUP,
         ),
         Provider(
@@ -242,22 +249,28 @@ def providers(*, secrets: SecretStore | None = None) -> list[Provider]:
     ]
 
 
-def available(*, secrets: SecretStore | None = None) -> list[Provider]:
-    return [item for item in providers(secrets=secrets) if item.available]
+def available(
+    *, secrets: SecretStore | None = None, kokoro_path: str = ""
+) -> list[Provider]:
+    return [
+        item
+        for item in providers(secrets=secrets, kokoro_path=kokoro_path)
+        if item.available
+    ]
 
 
-def _kokoro_available() -> bool:
+def _kokoro_available(kokoro_path: str = "") -> bool:
     try:
         from voxflow.hermes.synthesizers import KokoroSynthesizer
 
-        return KokoroSynthesizer.available()
+        return KokoroSynthesizer.available(kokoro_path)
     except Exception as exc:  # noqa: BLE001 - probing must never break the settings UI
         logger.warning("kokoro_probe_failed error={!s}", exc)
         return False
 
 
-def _kokoro_detail() -> str:
-    if _kokoro_available():
+def _kokoro_detail(kokoro_path: str = "") -> str:
+    if _kokoro_available(kokoro_path):
         return "Modelo local pronto (24 kHz, offline)."
     import importlib.util
 

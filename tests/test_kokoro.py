@@ -14,7 +14,7 @@ import pytest
 
 from voxflow.config import TTSConfig
 from voxflow.hermes.synthesizers import KOKORO_REPO, KokoroSynthesizer, build
-from voxflow.hermes.voices import KOKORO, voices_for
+from voxflow.hermes.voices import KOKORO, NEEDS_SETUP, READY, providers, voices_for
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -184,3 +184,44 @@ def test_kokoro_writes_wav_because_that_is_what_it_produces() -> None:
 )
 def test_speed_stays_inside_the_range_kokoro_accepts(rate: str, expected: float) -> None:
     assert KokoroSynthesizer("pf_dora", rate)._speed == pytest.approx(expected)
+
+
+# --- the folder the user chose has to be consulted ---------------------------------
+
+
+def _kokoro_entry(kokoro_path: str = ""):  # noqa: ANN202 - a Provider, from the list
+    found = providers(secrets=FakeSecrets(), kokoro_path=kokoro_path)
+    return next(entry for entry in found if entry.name == KOKORO)
+
+
+def test_a_model_kept_outside_the_caches_is_still_offered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`tts.kokoro_path` existed and nothing ever passed it to the probe.
+
+    The synthesizer honoured the setting — `find_model` takes it as its first
+    candidate — while the settings window asked without it. So a model kept anywhere
+    but a default cache was announced as "falta configurar" by the very screen that
+    had just been told where it was.
+    """
+
+    import voxflow.models
+
+    monkeypatch.setattr(voxflow.models, "default_roots", lambda: [tmp_path / "nada"])
+    folder = plant_model(tmp_path / "outro-lugar")
+
+    assert _kokoro_entry(str(folder)).status == READY
+    assert _kokoro_entry(str(folder)).suffix == ""
+
+
+def test_without_the_setting_a_model_outside_the_caches_stays_invisible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import voxflow.models
+
+    monkeypatch.setattr(voxflow.models, "default_roots", lambda: [tmp_path / "nada"])
+    plant_model(tmp_path / "outro-lugar")
+
+    entry = _kokoro_entry()
+    assert entry.status == NEEDS_SETUP
+    assert entry.suffix == "  (falta configurar)"

@@ -1275,3 +1275,60 @@ gráfica.
 ### Arquivos alterados
 
 `.github/workflows/ci.yml`.
+
+## O Kokoro dizia "falta configurar" numa build que já não era a instalada (2026-09-08)
+
+O usuário perguntou por que o Kokoro ainda aparecia como `(falta configurar)`. A resposta
+exigiu medir dentro do executável empacotado, porque é lá que ele difere do fonte.
+
+### A hipótese natural estava errada
+
+`onnx/model.onnx` no cache do HuggingFace **é** um symlink, e este projeto já tropeçou
+nisso duas vezes (Fase 2 e 0.7.10, que é por que o Whisper é materializado em
+`%LOCALAPPDATA%\VoxFlow\models\large-v3-turbo`). Era o suspeito óbvio. A medição o
+descartou: o aplicativo empacotado atravessa o link sem problema.
+
+Para medir, `voxflow --check` ganhou `kokoro_probe`, que informa pacote encontrado,
+modelo encontrado, caminho configurado e raízes buscadas. Rodado no exe empacotado:
+
+```
+kokoro_probe package=True model='...\snapshots\1939ad2a...\onnx\model.onnx'
+             configured='' roots=[...\huggingface\hub, ...\VoxFlow\models]
+```
+
+Como nenhum commit tocou `synthesizers.py`, `models.py`, `fsprobe.py` ou `voices.py`
+desde a 0.7.14, essa medição vale para a build instalada.
+
+### A causa real
+
+O log guardava o motivo antigo:
+
+```
+kokoro_unavailable reason=[Errno 2] No such file or directory:
+  '...\Programs\VoxFlow\_internal\kokoro_onnx\config.json'
+```
+
+É o defeito que a **0.7.13** corrigiu no `voxflow.spec`. O usuário estava vendo uma tela
+anterior à instalação da 0.7.14, que aconteceu no meio da conversa — o registro dizia
+0.7.13 no início da sessão e 0.7.14 depois, com o processo subindo às 10:37 a partir do
+executável instalado. Confirmado por ele: com a 0.7.14 no ar, o Kokoro aparece pronto.
+
+Lição registrada: antes de investigar um sintoma de interface, confirmar **qual build
+está na tela**. O registro de desinstalação e o carimbo do `VoxFlow.exe` respondem isso
+em dois comandos, e teriam encurtado esta investigação.
+
+### Um defeito real encontrado no caminho
+
+`providers()` nunca recebia `tts.kokoro_path`. O sintetizador honra a configuração —
+`find_model` a usa como primeiro candidato —, mas a janela de Ajustes perguntava sem
+ela. Quem guardasse o modelo fora dos caches padrão leria `(falta configurar)` na
+própria tela que acabara de ser informada de onde o modelo está. O caminho agora é
+passado por `providers()`, `available()`, `_kokoro_available()` e `_kokoro_detail()`.
+
+### Arquivos alterados
+
+`src/voxflow/diagnostics.py`, `src/voxflow/hermes/voices.py`,
+`src/voxflow/ui/settings.py`, `tests/test_kokoro.py`.
+
+Validação: Ruff aprovado, 233 testes aprovados, sonda medida no executável empacotado e
+o teste novo exercitado contra o defeito para confirmar que ele reprova.

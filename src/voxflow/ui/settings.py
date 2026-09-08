@@ -307,7 +307,7 @@ class SettingsWindow(CosmicPanel):
         self._attach_screenshot = QCheckBox("Permitir screenshot por comando")
         self._attach_screenshot.setChecked(self._config.hermes.attach_screenshot_on_command)
         self._tts_provider = QComboBox()
-        for entry in tts_providers():
+        for entry in tts_providers(kokoro_path=self._config.hermes.tts.kokoro_path):
             self._tts_provider.addItem(f"{entry.label}{entry.suffix}", entry.name)
         provider_index = self._tts_provider.findData(self._config.hermes.tts.provider)
         self._tts_provider.setCurrentIndex(max(provider_index, 0))
@@ -500,7 +500,14 @@ class SettingsWindow(CosmicPanel):
 
         self._fill_groups(provider)
         self._refill_voices()
-        entry = next((item for item in tts_providers() if item.name == provider), None)
+        entry = next(
+            (
+                item
+                for item in tts_providers(kokoro_path=self._config.hermes.tts.kokoro_path)
+                if item.name == provider
+            ),
+            None,
+        )
         self._provider_note.setText(entry.detail if entry is not None else "")
 
     def _fill_groups(self, provider: str) -> None:

@@ -52,6 +52,34 @@ def _find_input_device(
     return candidates[0]
 
 
+def _log_kokoro_probe(config: AppConfig) -> None:
+    """Say out loud why Kokoro is, or is not, offered by this build.
+
+    The probe answers differently from source and from the packaged application —
+    the HuggingFace cache fills its snapshots with symlinks, and the installed
+    application cannot always follow them. Reading that difference used to require
+    guessing, because the settings window shows only the verdict.
+    """
+
+    try:
+        import importlib.util
+
+        from voxflow.hermes.synthesizers import KokoroSynthesizer
+        from voxflow.models import default_roots
+
+        package = importlib.util.find_spec("kokoro_onnx") is not None
+        found = KokoroSynthesizer.find_model(config.hermes.tts.kokoro_path)
+        logger.info(
+            "kokoro_probe package={} model={!r} configured={!r} roots={}",
+            package,
+            str(found[0]) if found else None,
+            config.hermes.tts.kokoro_path,
+            [str(root) for root in default_roots()],
+        )
+    except Exception as exc:  # noqa: BLE001 - a diagnostic must never break --check
+        logger.warning("kokoro_probe_error error_type={} error={!s}", type(exc).__name__, exc)
+
+
 def run_check(
     config: AppConfig,
     paths: AppPaths,
@@ -87,5 +115,6 @@ def run_check(
         result.selected_microphone,
         result.elapsed_ms,
     )
+    _log_kokoro_probe(config)
     return result
 
