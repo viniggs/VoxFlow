@@ -791,3 +791,64 @@ desatualizado desde que os atalhos viraram configuráveis em 0.7.6.
 
 Validação: Ruff aprovado, 133 testes aprovados, aba STT renderizada com 2 de 9 modelos
 oferecidos e os 7 restantes explicados por categoria.
+
+## 0.7.8 — O seletor de voz passa a valer (2026-09-07)
+
+O usuário já tinha percebido sozinho: trocar o provider de TTS não mudava nada.
+`_create_speaker` devolvia `EdgeSentenceSpeaker` em qualquer caso, e `chatterbox` só
+existia como string em `config.py` e `settings.py`.
+
+### A costura
+
+Só uma coisa difere entre providers: `frase → (arquivo de áudio, tempos das palavras)`.
+Fila, interrupção, reprodução e realce são compartilhados. `hermes/synthesizers.py`
+(novo) isola exatamente isso num `Protocol`, e `EdgeSentenceSpeaker` virou
+`SentenceSpeaker`, que recebe um sintetizador em vez de voz e velocidade.
+
+| Provider | Estado | Observação |
+|---|---|---|
+| `edge` | funciona | único que reporta limites de palavra |
+| `sapi` | funciona | offline, via COM do Windows; **133 ms** até o primeiro áudio, medido |
+| `openai` | funciona | exige chave em `openai` nos segredos |
+| `chatterbox` | não integrado | marcado como indisponível, com o motivo |
+
+### O realce sobrevive sem limites de palavra
+
+Só o Edge diz onde cada palavra cai. Sem isso o karaokê e o orbe ficariam parados.
+`estimate_word_timings` distribui as palavras proporcionalmente ao comprimento —
+mas **ancorado na duração real do clipe**, consultada no MCI (`status length`) depois
+de abrir o arquivo, e não numa estimativa de palavras por minuto. Assim o realce não
+adianta nem atrasa em relação ao áudio. Verificado com SAPI: 10 palavras, todas
+realçadas na ordem.
+
+Por isso `AudioItem` passou a carregar a frase em vez de só a contagem de caracteres:
+a estimativa acontece na reprodução, quando a duração é conhecida.
+
+### As listas de voz não se misturam
+
+`hermes/voices.py` (novo) responde quais providers a máquina consegue rodar e quais
+vozes cada um tem. Um nome do Edge não significa nada para o Windows, então trocar de
+provider **reconstrói** a lista, nos dois lugares: Ajustes → Hermes e a barra sob a
+Friday. Cada voz tem um nome curto próprio, porque truncar a etiqueta longa colidia
+duas Thalitas diferentes numa só.
+
+Providers indisponíveis aparecem marcados com o motivo, em vez de sumirem — quem
+escolheu `openai` precisa saber que falta a chave, não que a opção evaporou.
+
+### O que ficou de fora, e por quê
+
+Chatterbox **é viável**: importa da pasta do usuário, torch 2.8 com CUDA disponível,
+`generate(text, audio_prompt_path=..., language_id=...)`. Mas a "voz" dele é um áudio
+de referência, não um nome, e carregar o modelo por frase inviabilizaria a conversa.
+Precisa de um processo persistente e de medição de latência antes de prometer que serve
+para conversa ao vivo. É uma entrega própria.
+
+### Arquivos alterados
+
+`src/voxflow/hermes/synthesizers.py` (novo), `src/voxflow/hermes/voices.py` (novo),
+`src/voxflow/hermes/tts.py`, `src/voxflow/app.py`, `src/voxflow/main.py`,
+`src/voxflow/ui/settings.py`, `src/voxflow/ui/conversation.py`,
+`tests/test_voice_providers.py` (novo).
+
+Validação: Ruff aprovado, 158 testes aprovados, SAPI sintetizado e reproduzido de ponta
+a ponta (241 ms de síntese, 133 ms até o primeiro áudio, realce correto).

@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from voxflow.hermes.voices import voices_for
 from voxflow.ui.cosmos import CosmicPainter
 from voxflow.ui.orb import Orb
 from voxflow.ui.placement import active_screen_geometry
@@ -51,11 +52,8 @@ _BUBBLE_PADDING_Y = 27
 #: How much of a thought is kept on screen. Reasoning runs to tens of thousands of
 #: characters; laying all of it out costs more than it is worth to a reader.
 _THOUGHT_MAX_CHARS = 2400
-_VOICES = (
-    ("Thalita", "pt-BR-ThalitaMultilingualNeural"),
-    ("Francisca", "pt-BR-FranciscaNeural"),
-    ("Antônio", "pt-BR-AntonioNeural"),
-)
+#: Voice names are meaningless across providers — an Edge name says nothing to
+#: Windows — so the list is always rebuilt for whichever provider is speaking.
 
 
 def _normalise(word: str) -> str:
@@ -230,7 +228,7 @@ class ConversationOverlay(QWidget):
     voice_changed = Signal(str)
     settings_requested = Signal()
 
-    def __init__(self, voice: str) -> None:
+    def __init__(self, voice: str, provider: str = "edge") -> None:
         super().__init__()
         self.setWindowTitle("VoxFlow — Friday")
         self.setWindowFlags(
@@ -290,8 +288,9 @@ class ConversationOverlay(QWidget):
         controls_layout.setSpacing(10)
         self._voice = QComboBox()
         self._voice.setFixedWidth(150)
-        for label, identifier in _VOICES:
-            self._voice.addItem(label, identifier)
+        self._provider = provider
+        for option in voices_for(provider):
+            self._voice.addItem(option.short, option.identifier)
         index = self._voice.findData(voice)
         if index >= 0:
             self._voice.setCurrentIndex(index)
@@ -393,6 +392,21 @@ class ConversationOverlay(QWidget):
         bubble = self._ensure_bubble("friday")
         bubble.append(delta)
         self._scroll_to_end()
+
+    def set_provider(self, provider: str, voice: str = "") -> None:
+        """Rebuild the list for a new provider, keeping the voice when it still exists."""
+
+        if provider == self._provider and not voice:
+            return
+        self._provider = provider
+        wanted = voice or str(self._voice.currentData() or "")
+        self._voice.blockSignals(True)
+        self._voice.clear()
+        for option in voices_for(provider):
+            self._voice.addItem(option.short, option.identifier)
+        index = self._voice.findData(wanted)
+        self._voice.setCurrentIndex(index if index >= 0 else 0)
+        self._voice.blockSignals(False)
 
     def set_voice(self, voice: str) -> None:
         index = self._voice.findData(voice)

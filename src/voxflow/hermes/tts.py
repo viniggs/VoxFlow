@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import bisect
 import ctypes
 import math
@@ -16,15 +15,21 @@ from pathlib import Path
 
 from loguru import logger
 
+from voxflow.hermes.synthesizers import (
+    EdgeSynthesizer,
+    Synthesizer,
+    WordTiming,
+    estimate_word_timings,
+)
+
 _SENTENCE_END = re.compile(r"(?<=[.!?…])(?:\s+|$)")
 _MIN_SENTENCE_CHARS = 12
 
-#: ``(start_ms, duration_ms, text)`` for every word Edge TTS reported.
-WordTiming = tuple[float, float, str]
-AudioItem = tuple[int, Path | None, int, list[WordTiming]]
+__all__ = ["SentenceBuffer", "SentenceSpeaker", "WordTiming", "clean_spoken_text"]
 
-#: Edge TTS reports offsets in 100-nanosecond ticks.
-_TICKS_PER_MS = 10_000.0
+#: The sentence travels with its audio so a provider that reports no word boundaries
+#: can still have them estimated against the clip's real length at playback time.
+AudioItem = tuple[int, Path | None, str, list[WordTiming]]
 
 
 class SentenceBuffer:
@@ -89,18 +94,18 @@ def speech_envelope(words: list[WordTiming], position_ms: float) -> tuple[float,
     return max(0.0, min(1.0, (0.34 + 0.62 * shape) * ripple)), text
 
 
-class EdgeSentenceSpeaker:
+class SentenceSpeaker:
+    """Speaks sentences as they arrive, through whichever provider was built for it."""
+
     def __init__(
         self,
-        voice: str,
-        rate: str,
+        synthesizer: Synthesizer,
         on_speaking: Callable[[], None],
         on_idle: Callable[[], None],
         on_error: Callable[[str], None],
         on_speech: Callable[[float, str], None] | None = None,
     ) -> None:
-        self._voice = voice
-        self._rate = rate
+        self._synthesizer = synthesizer
         self._on_speaking = on_speaking
         self._on_idle = on_idle
         self._on_error = on_error
@@ -126,7 +131,11 @@ class EdgeSentenceSpeaker:
         )
         self._synth_thread.start()
         self._play_thread.start()
-        logger.info("tts_speaker_ready provider=edge voice={!r} rate={!r}", voice, rate)
+        logger.info(
+            "tts_speaker_ready synthesizer={} timings={}",
+            type(synthesizer).__name__,
+            "reported" if isinstance(synthesizer, EdgeSynthesizer) else "estimated",
+        )
 
     def begin_response(self) -> None:
         with self._lock:
@@ -187,13 +196,13 @@ class EdgeSentenceSpeaker:
                 return
             generation, sentence = item
             if not sentence:
-                self._audio_queue.put((generation, None, 0, []))
+                self._audio_queue.put((generation, None, "", []))
                 continue
             try:
                 audio = self._synthesize(generation, sentence)
                 if audio is not None:
                     path, words = audio
-                    self._audio_queue.put((generation, path, len(sentence), words))
+                    self._audio_queue.put((generation, path, sentence, words))
             except Exception as exc:
                 logger.warning("tts_failed error_type={} error={!s}", type(exc).__name__, exc)
                 self._on_error(f"Voz indisponível: {type(exc).__name__}")
@@ -201,45 +210,22 @@ class EdgeSentenceSpeaker:
     def _synthesize(
         self, generation: int, sentence: str
     ) -> tuple[Path, list[WordTiming]] | None:
-        import edge_tts
-
-        with tempfile.NamedTemporaryFile(prefix="voxflow-", suffix=".mp3", delete=False) as file:
+        suffix = getattr(self._synthesizer, "suffix", ".mp3")
+        with tempfile.NamedTemporaryFile(prefix="voxflow-", suffix=suffix, delete=False) as file:
             path = Path(file.name)
-        communicate = edge_tts.Communicate(sentence, self._voice, rate=self._rate)
-        words = asyncio.run(self._collect(communicate, path))
+        words = self._synthesizer.synthesize(sentence, path)
         with self._lock:
             if generation != self._generation:
                 path.unlink(missing_ok=True)
                 return None
         return path, words
 
-    @staticmethod
-    async def _collect(communicate: object, path: Path) -> list[WordTiming]:
-        """Stream synthesis, saving audio while capturing word boundaries."""
-
-        words: list[WordTiming] = []
-        with path.open("wb") as handle:
-            async for chunk in communicate.stream():  # type: ignore[attr-defined]
-                kind = chunk.get("type")
-                if kind == "audio":
-                    handle.write(chunk.get("data", b""))
-                elif kind == "WordBoundary":
-                    words.append(
-                        (
-                            float(chunk.get("offset", 0)) / _TICKS_PER_MS,
-                            float(chunk.get("duration", 0)) / _TICKS_PER_MS,
-                            str(chunk.get("text", "")),
-                        )
-                    )
-        words.sort(key=lambda word: word[0])
-        return words
-
     def _playback_loop(self) -> None:
         while True:
             item = self._audio_queue.get()
             if item is None:
                 return
-            generation, path, character_count, words = item
+            generation, path, sentence, words = item
             if path is None:
                 with self._lock:
                     idle = not self._response_open and generation == self._generation
@@ -254,7 +240,7 @@ class EdgeSentenceSpeaker:
                 continue
             try:
                 self._on_speaking()
-                self._play(generation, path, character_count, words)
+                self._play(generation, path, sentence, words)
             except Exception as exc:
                 logger.warning(
                     "tts_playback_failed error_type={} error={!s}",
@@ -269,13 +255,18 @@ class EdgeSentenceSpeaker:
         self,
         generation: int,
         path: Path,
-        character_count: int,
+        sentence: str,
         words: list[WordTiming],
     ) -> None:
         started = time.perf_counter()
         last_word = ""
         try:
             self._mci(f'open "{path}" type mpegvideo alias {self._alias}', raise_on_error=True)
+            if not words:
+                # Only Edge says where its words fall. For the rest they are laid out
+                # here, against the length the mixer reports, so the highlight and the
+                # orb still follow the voice instead of standing still.
+                words = estimate_word_timings(sentence, self._clip_length_ms())
             self._mci(f"play {self._alias}", raise_on_error=True)
             with self._lock:
                 if self._last_audio_ended_at:
@@ -301,7 +292,7 @@ class EdgeSentenceSpeaker:
             logger.info(
                 "tts_sentence_completed elapsed_ms={:.2f} chars={} words={}",
                 (time.perf_counter() - started) * 1000,
-                character_count,
+                len(sentence),
                 len(words),
             )
         finally:
@@ -309,6 +300,14 @@ class EdgeSentenceSpeaker:
             self._on_speech(0.0, "")
             with self._lock:
                 self._last_audio_ended_at = time.perf_counter()
+
+    def _clip_length_ms(self) -> float:
+        """How long the open clip runs, per the Windows mixer."""
+
+        try:
+            return float(self._mci(f"status {self._alias} length"))
+        except ValueError:
+            return 0.0
 
     def _playback_position_ms(self, started: float) -> float:
         """Millisecond position inside the current clip, per the Windows mixer."""

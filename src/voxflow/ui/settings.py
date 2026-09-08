@@ -26,6 +26,8 @@ from PySide6.QtWidgets import (
 
 from voxflow.autostart import set_autostart
 from voxflow.config import AppConfig, save_config
+from voxflow.hermes.voices import providers as tts_providers
+from voxflow.hermes.voices import voices_for
 from voxflow.models import STT_FASTER_WHISPER, LocalModel, discover, for_slot
 from voxflow.paths import AppPaths
 from voxflow.secrets import SecretStore
@@ -293,13 +295,20 @@ class SettingsWindow(CosmicPanel):
         self._attach_screenshot = QCheckBox("Permitir screenshot por comando")
         self._attach_screenshot.setChecked(self._config.hermes.attach_screenshot_on_command)
         self._tts_provider = QComboBox()
-        self._tts_provider.addItems(["edge", "openai", "sapi", "chatterbox"])
-        self._tts_provider.setCurrentText(self._config.hermes.tts.provider)
+        for entry in tts_providers():
+            mark = "" if entry.available else "  (indisponível)"
+            self._tts_provider.addItem(f"{entry.label}{mark}", entry.name)
+        provider_index = self._tts_provider.findData(self._config.hermes.tts.provider)
+        self._tts_provider.setCurrentIndex(max(provider_index, 0))
+        self._tts_provider.activated.connect(self._on_provider_picked)
+        self._provider_note = QLabel("")
+        self._provider_note.setWordWrap(True)
+        self._provider_note.setStyleSheet(
+            f"color: {rgba(TEXT_FAINT)}; font-size: 11px; background: transparent;"
+        )
         self._tts_voice = QComboBox()
         self._tts_voice.setEditable(True)
-        self._tts_voice.addItem("Thalita — feminina multilíngue", "pt-BR-ThalitaMultilingualNeural")
-        self._tts_voice.addItem("Francisca — feminina", "pt-BR-FranciscaNeural")
-        self._tts_voice.addItem("Antônio — masculina", "pt-BR-AntonioNeural")
+        self._fill_voices(self._config.hermes.tts.provider)
         voice_index = self._tts_voice.findData(self._config.hermes.tts.voice)
         if voice_index >= 0:
             self._tts_voice.setCurrentIndex(voice_index)
@@ -327,6 +336,7 @@ class SettingsWindow(CosmicPanel):
         form.addRow("Half-duplex:", self._half_duplex)
         form.addRow("Screenshot:", self._attach_screenshot)
         form.addRow("Provider TTS:", self._tts_provider)
+        form.addRow("", self._provider_note)
         form.addRow("Voz:", self._tts_voice)
         form.addRow("Velocidade:", self._tts_rate)
         form.addRow("Chatterbox:", self._chatterbox_path)
@@ -454,6 +464,23 @@ class SettingsWindow(CosmicPanel):
 
         self._studio.feed_microphone(rms)
 
+    def _fill_voices(self, provider: str) -> None:
+        """A voice list belongs to one provider; nothing is carried across."""
+
+        self._tts_voice.clear()
+        for option in voices_for(provider):
+            self._tts_voice.addItem(option.label, option.identifier)
+        entry = next((item for item in tts_providers() if item.name == provider), None)
+        self._provider_note.setText(entry.detail if entry is not None else "")
+
+    def _on_provider_picked(self, index: int) -> None:
+        del index
+        provider = str(self._tts_provider.currentData() or "edge")
+        self._fill_voices(provider)
+        if self._tts_voice.count():
+            self._tts_voice.setCurrentIndex(0)
+            self._emit_voice()
+
     def _emit_voice(self) -> None:
         voice = str(self._tts_voice.currentData() or self._tts_voice.currentText()).strip()
         if voice:
@@ -546,7 +573,7 @@ class SettingsWindow(CosmicPanel):
         )
         tts = self._config.hermes.tts.model_copy(
             update={
-                "provider": self._tts_provider.currentText(),
+                "provider": self._tts_provider.currentData(),
                 "voice": str(
                     self._tts_voice.currentData() or self._tts_voice.currentText()
                 ).strip(),

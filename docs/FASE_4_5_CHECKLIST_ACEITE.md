@@ -330,3 +330,34 @@ Data: 2026-09-07
   que ele aparece.
 - [ ] Aba Geral: confirmar que "Atalhos" agora aponta para a aba Atalhos em vez de
   anunciar `Ctrl + Numpad +`.
+
+---
+
+# VoxFlow 0.7.8 — Provider de voz de verdade
+
+Data: 2026-09-07
+
+## O seletor funciona
+
+- [ ] Ajustes → Hermes → **Provider TTS**: confirmar que aparecem os quatro, com
+  *(indisponível)* em OpenAI (sem chave) e Chatterbox, e a explicação embaixo.
+- [ ] Escolher **Windows (offline)** e confirmar que a lista de vozes vira Maria e Zira.
+- [ ] Salvar, falar com a Friday e confirmar que **a voz mudou de verdade** — é o teste
+  que prova a correção.
+- [ ] Confirmar que o realce palavra por palavra e o movimento do orbe continuam
+  acompanhando a fala com a voz do Windows.
+- [ ] Voltar para **Edge** e confirmar que as vozes voltam a ser Thalita/Francisca/etc.
+
+## As listas não se misturam
+
+- [ ] Com o provider em Windows, abrir a Friday (F9) e confirmar que a barra de
+  controles mostra **Maria/Zira**, não as vozes do Edge.
+- [ ] Trocar o provider em Ajustes e salvar com a Friday aberta; confirmar que a lista
+  na barra dela se atualiza junto.
+- [ ] Confirmar que nenhuma voz do Edge aparece quando o provider é Windows, e
+  vice-versa.
+
+## Se você tiver chave da OpenAI
+
+- [ ] Guardar a chave, reabrir Ajustes e confirmar que OpenAI deixa de estar
+  *(indisponível)* e oferece Alloy/Echo/Fable/Onyx/Nova/Shimmer.

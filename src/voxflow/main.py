@@ -81,7 +81,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     overlay = DictationOverlay()
     history_window = HistoryWindow(history_store)
     settings_window = SettingsWindow(config, paths)
-    conversation = ConversationOverlay(config.hermes.tts.voice)
+    conversation = ConversationOverlay(config.hermes.tts.voice, config.hermes.tts.provider)
     reasoning = ReasoningStream(default_directory(), config.hermes.conversation_id)
     reasoning.block_started.connect(conversation.begin_thinking)
     reasoning.delta.connect(conversation.append_thinking)
@@ -107,6 +107,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     controller.signals.status_changed.connect(tray.set_status)
     controller.signals.history_changed.connect(history_window.refresh)
     settings_window.saved.connect(controller.apply_config)
+    # The panel's voice list is only meaningful for the provider in use.
+    settings_window.saved.connect(
+        lambda saved: conversation.set_provider(saved.hermes.tts.provider, saved.hermes.tts.voice)
+    )
     controller.signals.recording_level_changed.connect(settings_window.feed_microphone)
     settings_window.history_requested.connect(history_window.show_and_refresh)
     settings_window.hermes_action_requested.connect(controller.request_hermes_action)

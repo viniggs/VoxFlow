@@ -17,7 +17,8 @@ from voxflow.audio.vad import EndpointDetector, VADEvent
 from voxflow.config import AppConfig
 from voxflow.hermes.client import HermesClient
 from voxflow.hermes.gateway import start_gateway, stop_gateway
-from voxflow.hermes.tts import EdgeSentenceSpeaker, SentenceBuffer
+from voxflow.hermes.synthesizers import build as build_synthesizer
+from voxflow.hermes.tts import SentenceBuffer, SentenceSpeaker
 from voxflow.hotkeys import NativeHoldHotkey
 from voxflow.keys import parse
 from voxflow.secrets import SecretStore
@@ -193,10 +194,9 @@ class VoxFlowController(QObject):
             config.hermes.conversation_id,
         )
 
-    def _create_speaker(self, config: AppConfig) -> EdgeSentenceSpeaker:
-        return EdgeSentenceSpeaker(
-            config.hermes.tts.voice,
-            config.hermes.tts.rate,
+    def _create_speaker(self, config: AppConfig) -> SentenceSpeaker:
+        return SentenceSpeaker(
+            build_synthesizer(config.hermes.tts),
             self._signals.tts_started.emit,
             self._signals.tts_idle.emit,
             self._signals.tts_error.emit,
