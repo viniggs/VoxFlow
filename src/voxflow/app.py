@@ -11,16 +11,20 @@ from typing import Any
 from loguru import logger
 from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
 
+from voxflow import screenshot
 from voxflow.audio.capture import AudioCapture, AudioClip
 from voxflow.audio.cues import play_cue
 from voxflow.audio.vad import EndpointDetector, VADEvent
 from voxflow.config import AppConfig
-from voxflow.hermes.client import HermesClient
+from voxflow.hermes import study
+from voxflow.hermes.client import HermesClient, HermesReply
 from voxflow.hermes.gateway import start_gateway, stop_gateway
+from voxflow.hermes.study import CLOSING_PROMPT, Recognised, SessionLog, StudyCommand
 from voxflow.hermes.synthesizers import build as build_synthesizer
 from voxflow.hermes.tts import SentenceBuffer, SentenceSpeaker
 from voxflow.hotkeys import NativeHoldHotkey
 from voxflow.keys import parse
+from voxflow.paths import get_app_paths
 from voxflow.secrets import SecretStore
 from voxflow.storage import HistoryStore
 from voxflow.stt.base import Transcript
@@ -77,6 +81,9 @@ class ControllerSignals(QObject):
     hermes_gateway_status = Signal(str)
     hermes_speech = Signal(float, str)
     hermes_audio_ready = Signal(int, object)
+    #: A screenshot is grabbed off the Qt thread — 233 ms measured — and comes back
+    #: here to be sent, so the window never freezes while the screen is read.
+    hermes_screenshot_ready = Signal(int, object, str)
     hermes_response_ready = Signal(int, object)
     hermes_stream_delta = Signal(int, str)
     tts_started = Signal()
@@ -103,6 +110,7 @@ class VoxFlowController(QObject):
         self._signals.talk_released.connect(self._on_talk_released, queued)
         self._signals.talk_cancelled.connect(self._on_talk_cancelled, queued)
         self._signals.hermes_audio_ready.connect(self._on_hermes_audio_ready, queued)
+        self._signals.hermes_screenshot_ready.connect(self._on_screenshot_ready, queued)
         self._signals.hermes_response_ready.connect(self._on_hermes_response_ready, queued)
         self._signals.hermes_stream_delta.connect(self._on_hermes_stream_delta, queued)
         self._signals.tts_started.connect(self._on_tts_started, queued)
@@ -146,6 +154,13 @@ class VoxFlowController(QObject):
         self._talk_started_at = 0.0
         self._pending_talk_clip: AudioClip | None = None
         self._hermes_cancel = threading.Event()
+        self._session_log = SessionLog(get_app_paths().session_dir)
+        self._session_open = False
+        #: Kept so "repete" can say it again without asking Hermes to generate it twice.
+        self._last_answer = ""
+        #: True between "encerra sessão" and the end of the closing words, so the mode
+        #: shuts down after she finishes speaking rather than in the middle of it.
+        self._closing_session = False
         self._hermes_client = self._create_hermes_client(config)
         self._sentence_buffer = SentenceBuffer()
         self._speaker = self._create_speaker(config)
@@ -571,6 +586,11 @@ class VoxFlowController(QObject):
         self._signals.status_changed.emit(f"Hermes: {message or state.value}")
 
     def _enter_hermes_listening(self, message: str = "ouvindo") -> None:
+        if not self._session_open:
+            # Written when she is really up, not when the mode is requested: a gateway
+            # that fails to start would otherwise leave an empty heading behind.
+            self._session_open = True
+            self._session_log.start(self._config.hermes.conversation_id)
         self._vad.reset()
         self._barge_vad.reset()
         self._audio.clear_preroll()
@@ -601,6 +621,8 @@ class VoxFlowController(QObject):
             self._hermes_control.submit(self._hermes_client.stop_active_run)
 
     def _stop_hermes_mode(self) -> None:
+        self._session_open = False
+        self._closing_session = False
         self._hermes_generation += 1
         self._talk_active = False
         self._pending_talk_clip = None
@@ -768,25 +790,181 @@ class VoxFlowController(QObject):
             self._enter_hermes_listening("não entendi; fale novamente")
             return
         self._signals.hermes_heard.emit(transcript.text)
+        recognised = study.match(transcript.text)
+        if recognised is not None:
+            # The app owns these words. Sending "modo ditado" to Hermes would get a
+            # polite explanation of dictation instead of switching to it.
+            self._handle_study_command(recognised)
+            return
+        self._session_log.user(transcript.text)
+        self._send_hermes_turn(transcript.text)
+
+    def _send_hermes_turn(self, text: str, image_data_url: str = "") -> None:
+        """Put one turn on the wire and stream it back.
+
+        An image forces the Responses endpoint: ``/v1/runs`` reads its input through
+        ``str(content)``, so a picture sent there arrives as the text of a list.
+        """
+
+        generation = self._hermes_generation
         self._set_hermes_state(HermesState.THINKING, "resposta chegando em tempo real")
         self._hermes_cancel = threading.Event()
         self._sentence_buffer = SentenceBuffer()
         self._speaker.begin_response()
-        stream = (
-            self._hermes_client.stream_run
-            if self._config.hermes.use_runs_api
-            else self._hermes_client.stream_response
-        )
-        future = self._hermes_executor.submit(
-            stream,
-            transcript.text,
-            self._config.hermes.instructions,
-            lambda delta: self._signals.hermes_stream_delta.emit(generation, delta),
-            self._hermes_cancel,
-        )
+        on_delta = lambda delta: self._signals.hermes_stream_delta.emit(generation, delta)  # noqa: E731
+        if image_data_url:
+            future = self._hermes_executor.submit(
+                self._hermes_client.stream_response,
+                text,
+                self._config.hermes.instructions,
+                on_delta,
+                self._hermes_cancel,
+                image_data_url,
+            )
+        else:
+            stream = (
+                self._hermes_client.stream_run
+                if self._config.hermes.use_runs_api
+                else self._hermes_client.stream_response
+            )
+            future = self._hermes_executor.submit(
+                stream,
+                text,
+                self._config.hermes.instructions,
+                on_delta,
+                self._hermes_cancel,
+            )
         future.add_done_callback(
             lambda done, current=generation: self._complete_hermes_response(current, done)
         )
+
+    def _handle_study_command(self, recognised: Recognised) -> None:
+        """Carry out a command the app answers itself."""
+
+        command = recognised.command
+        if command is StudyCommand.SCREENSHOT:
+            self._capture_for_hermes(recognised.remainder)
+        elif command is StudyCommand.NEW_SESSION:
+            self._begin_new_session()
+        elif command is StudyCommand.END_SESSION:
+            self._close_session()
+        elif command is StudyCommand.DICTATION_MODE:
+            self._session_log.note("voltou para o modo ditado")
+            self._stop_hermes_mode()
+        elif command is StudyCommand.REPEAT:
+            self._repeat_last_answer()
+        elif command is StudyCommand.SLOWER:
+            self._shift_speech_rate(-10)
+        elif command is StudyCommand.FASTER:
+            self._shift_speech_rate(10)
+        elif command is StudyCommand.PAUSE:
+            self._speaker.interrupt()
+            self._enter_hermes_listening("pausado; fale quando quiser")
+
+    def _capture_for_hermes(self, question: str) -> None:
+        """Read the screen off the Qt thread, then send it with the question."""
+
+        if not self._config.hermes.attach_screenshot_on_command:
+            # The setting existed since phase 4 and meant nothing until now. Someone who
+            # turned it off asked not to have their screen read.
+            self._enter_hermes_listening("captura de tela desligada nas configurações")
+            return
+        asked = question or "Explique o que está na minha tela."
+        if self._config.hermes.screenshot_source == "hermes_tool":
+            # She looks with her own tool, so the picture and the answer are written to
+            # her session: the exchange appears in the Hermes desktop app and she can
+            # refer back to it. An image sent from here goes through /v1/responses,
+            # whose history lives in another store — measured: it left no trace in the
+            # session at all.
+            self._session_log.user(f"{asked} _(pedido de olhar a tela)_")
+            self._send_hermes_turn(
+                "Olhe agora a minha tela com a sua ferramenta de captura e responda: "
+                f"{asked}"
+            )
+            return
+        generation = self._hermes_generation
+        self._set_hermes_state(HermesState.THINKING, "olhando a sua tela")
+        future = self._hermes_control.submit(screenshot.capture)
+        future.add_done_callback(
+            lambda done, current=generation, text=asked: self._complete_screenshot(
+                current, done, text
+            )
+        )
+
+    def _complete_screenshot(self, generation: int, future: Future[Any], question: str) -> None:
+        try:
+            result: object = future.result()
+        except Exception as exc:
+            result = exc
+        self._signals.hermes_screenshot_ready.emit(generation, result, question)
+
+    @Slot(int, object, str)
+    def _on_screenshot_ready(self, generation: int, result: object, question: str) -> None:
+        if generation != self._hermes_generation or self._hermes_state is HermesState.OFF:
+            return
+        if isinstance(result, Exception):
+            self._session_log.note(f"captura de tela falhou: {type(result).__name__}")
+            self._enter_hermes_listening(f"não consegui ver a tela: {result}")
+            return
+        shot = result
+        self._session_log.user(
+            f"{question} _(com captura de tela {shot.width}×{shot.height})_"
+        )
+        self._send_hermes_turn(question, shot.data_url)
+
+    def _begin_new_session(self) -> None:
+        """Point the conversation at a fresh id. The old one is not touched.
+
+        Renaming rather than clearing: the named history the user built stays where it
+        is, and choosing its name again brings it back.
+        """
+
+        conversation = f"voxflow:estudo-{time.strftime('%Y%m%d-%H%M%S')}"
+        self._config.hermes.conversation_id = conversation
+        self._hermes_client = self._create_hermes_client(self._config)
+        self._session_log.start(conversation)
+        self._last_answer = ""
+        logger.info("study_new_session conversation={}", conversation)
+        self._enter_hermes_listening("nova sessão começada")
+
+    def _close_session(self) -> None:
+        """Ask for the summary and review questions, then shut down after she says it."""
+
+        self._closing_session = True
+        self._session_log.note("sessão encerrada — resumo e revisão pedidos")
+        self._send_hermes_turn(CLOSING_PROMPT)
+
+    def _repeat_last_answer(self) -> None:
+        if not self._last_answer:
+            self._enter_hermes_listening("ainda não há nada para repetir")
+            return
+        self._speaker.begin_response()
+        buffer = SentenceBuffer()
+        for sentence in buffer.add(self._last_answer):
+            self._speaker.enqueue(sentence)
+        tail = buffer.flush()
+        if tail:
+            self._speaker.enqueue(tail)
+        self._speaker.end_response()
+
+    @staticmethod
+    def _shifted_rate(rate: str, delta: int) -> str:
+        """Move a ``+5%``-style rate by ``delta`` points, within a speakable range."""
+
+        cleaned = (rate or "").strip().replace("%", "")
+        try:
+            current = int(float(cleaned))
+        except ValueError:
+            current = 0
+        return f"{max(-50, min(50, current + delta)):+d}%"
+
+    def _shift_speech_rate(self, delta: int) -> None:
+        rate = self._shifted_rate(self._config.hermes.tts.rate, delta)
+        self._config.hermes.tts.rate = rate
+        self._speaker.close()
+        self._speaker = self._create_speaker(self._config)
+        logger.info("study_speech_rate rate={}", rate)
+        self._enter_hermes_listening(f"velocidade da fala em {rate}")
 
     @Slot(int, str)
     def _on_hermes_stream_delta(self, generation: int, delta: str) -> None:
@@ -811,6 +989,9 @@ class VoxFlowController(QObject):
             self._speaker.interrupt()
             self._hermes_failure(result)
             return
+        if isinstance(result, HermesReply) and result.text.strip():
+            self._last_answer = result.text
+            self._session_log.agent(result.text)
         tail = self._sentence_buffer.flush()
         if tail:
             self._speaker.enqueue(tail)
@@ -826,6 +1007,11 @@ class VoxFlowController(QObject):
 
     @Slot()
     def _on_tts_idle(self) -> None:
+        if self._closing_session and self._hermes_state is not HermesState.OFF:
+            # She has finished the summary; now the mode can go, and not before.
+            logger.info("study_session_closed")
+            self._stop_hermes_mode()
+            return
         if self._hermes_state is not HermesState.OFF and not self._talk_active:
             self._enter_hermes_listening("pronto para a próxima pergunta")
 

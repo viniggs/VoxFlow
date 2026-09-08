@@ -79,6 +79,30 @@ de controles sob a Friday.
 Nos providers que não informam limites de palavra, o realce é distribuído sobre a
 duração real do áudio, então ele continua acompanhando a fala em vez de ficar parado.
 
+## Modo estudo
+
+Durante uma conversa, algumas frases são **comandos que o app executa sozinho**, e não
+perguntas para ela: *nova sessão*, *olha minha tela*, *modo ditado*, *repete*, *mais
+devagar*, *mais rápido*, *pausa* e *encerra sessão*. Valem como ordem curta, no começo da
+fala — uma pergunta que por acaso contenha essas palavras continua sendo pergunta.
+
+O que vem depois do comando viaja com ele: *"olha minha tela e explica esse slide"* manda
+a pergunta junto com a captura.
+
+**Quem olha a tela** (Ajustes → Hermes) decide entre duas coisas diferentes:
+
+- **Ela olha** (padrão) — a Friday usa a ferramenta dela. O pedido, a captura e a resposta
+  ficam na sessão do Hermes, então a conversa **aparece no app desktop dele** e ela pode
+  voltar ao assunto depois. Custa cerca de 170 s, porque ela procura a ferramenta antes.
+- **VoxFlow captura** — a captura é feita aqui e enviada junto. Responde em torno de 10 s,
+  mas a imagem não entra na sessão: esse caminho usa outro endpoint, cujo histórico mora
+  em outro lugar.
+
+Cada conversa é gravada em `Documentos\VoxFlow\sessions\AAAA-MM-DD.md`, um arquivo por
+dia, escrito turno a turno — fechar a janela não perde o que já foi dito. Dizer *"encerra
+sessão"* pede a ela um resumo e perguntas de revisão antes de desligar, e isso também vai
+para o arquivo.
+
 ## Instalar em outro computador
 
 O instalador é por usuário e não leva nada da máquina de origem: a configuração fica em

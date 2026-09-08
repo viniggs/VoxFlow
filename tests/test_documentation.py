@@ -20,7 +20,9 @@ from voxflow import __version__
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONTINUITY = REPO_ROOT / "CONTINUITY.md"
-CHECKLIST = REPO_ROOT / "docs" / "FASE_4_5_CHECKLIST_ACEITE.md"
+#: Every phase keeps its own checklist, so the guard looks across all of them
+#: rather than at one name that goes stale the moment a phase ends.
+CHECKLISTS = sorted((REPO_ROOT / "docs").glob("FASE_*_CHECKLIST_ACEITE.md"))
 PROMPT = REPO_ROOT / "PROMPT_INICIALIZACAO_PROXIMA_IA.md"
 README = REPO_ROOT / "README.md"
 
@@ -55,8 +57,8 @@ def test_the_continuity_header_announces_this_version() -> None:
 def test_the_checklist_has_a_section_for_this_version() -> None:
     # A release with nothing to test by hand still needs to say so, rather than being
     # quietly absent and indistinguishable from a forgotten one.
-    assert f"VoxFlow {__version__}" in read(CHECKLIST), (
-        f"O checklist não tem seção para {__version__}. "
+    assert any(f"VoxFlow {__version__}" in read(path) for path in CHECKLISTS), (
+        f"Nenhum checklist tem seção para {__version__}. "
         "Se não há nada a testar à mão, escreva isso explicitamente."
     )
 

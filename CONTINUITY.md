@@ -1,11 +1,11 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-08
-Versão: 0.7.16
-Fase concluída no código: Fase 4.5, aguardando aceite manual
-Instalador mais recente gerado: 0.7.16 (`releases/fase-4.5/0.7.16/`)
-O aceite da Fase 4.5 está pendente: a 0.7.16 fecha os itens de 0.7.13 a 0.7.15,
-que nunca chegaram a ser exercitados numa instalação.
+Versão: 0.8.0
+Fase concluída no código: Fase 5, aguardando aceite manual
+Instalador mais recente gerado: 0.8.0 (`releases/fase-5/0.8.0/`)
+O usuário pediu para juntar tudo num teste só: a 0.8.0 carrega a Fase 5 e também
+os itens ainda não aceitos de 0.7.13 a 0.7.16.
 
 ## Objetivo
 
@@ -1387,3 +1387,88 @@ de encolher. Passaram a duas linhas — seletores em cima, botões embaixo — 2
 
 Validação: Ruff aprovado, 241 testes aprovados, painel renderizado com os controles
 cabendo, e o teste do realce exercitado contra o defeito para confirmar que reprova.
+
+## 0.8.0 — Fase 5: o modo estudo (2026-09-08)
+
+Comandos de voz que o app responde sozinho, captura de tela, log Markdown por sessão e
+resumo com perguntas de revisão ao encerrar. O usuário autorizou seguir para a Fase 5 e
+pediu para juntar tudo num teste só, com a Fase 4.5 ainda sem aceite.
+
+### O pedido que mudou o desenho da captura
+
+A especificação manda o app tirar o screenshot e enviá-lo embutido. Implementei assim, e
+funcionou: 10,5 s até a resposta, com ela descrevendo a tela corretamente. Então o
+usuário pediu outra coisa — que a conversa aparecesse no **app desktop do Hermes** e que
+ela **lembrasse da imagem**. Medi antes de responder, e a medição derrubou o desenho:
+
+| Pergunta | Evidência |
+|---|---|
+| A imagem entra na sessão? | **Não.** `state.db` não guardou traço nenhum do turno com imagem; ele vive no `response_store.db`, outro banco |
+| Então como ela "lembrou" da tela no turno seguinte? | Não lembrou: ela **usou a ferramenta `computer_use` dela** e tirou um screenshot novo, 3440×1440. Por isso os detalhes vieram diferentes |
+| A conversa do VoxFlow aparece no app desktop? | O `state.db` é o mesmo. `voxflow:estudo` está lá com 149 mensagens, `source='api_server'`; a listagem só filtra por origem quando alguém pede |
+
+Ou seja, o que o usuário queria já era alcançável por um caminho melhor: **pedir que ela
+olhe com a ferramenta dela**. O turno, a chamada da ferramenta e a resposta ficam todos
+na sessão — verificado, oito mensagens gravadas em `voxflow:probe-desktop` — e portanto
+no app desktop, com ela podendo voltar ao assunto.
+
+O preço é tempo: **170 s** medidos, porque ela primeiro *procura* a ferramenta e depois a
+usa, contra **10,5 s** da captura local. Por isso `hermes.screenshot_source` existe:
+`hermes_tool` (padrão, o que o usuário pediu) e `voxflow` (rápido, fora da sessão). Os
+dois estão em Ajustes → Hermes, com a diferença escrita na tela.
+
+### `/v1/runs` não aceita imagem
+
+Lido no código do gateway instalado: ele resolve o input com
+`raw_input[-1].get("content", "")` e o histórico com `str(entry["content"])`. Uma imagem
+mandada por ali chegaria como o texto de uma lista Python. Só `/v1/responses` chama
+`_normalize_multimodal_content`, que reconhece `input_image`. `build_response_body`
+ganhou o parâmetro; `build_run_body` continua texto puro, e há teste dizendo por quê.
+
+### Os comandos
+
+`hermes/study.py` reconhece, antes de enviar: nova sessão, captura/olha a tela, modo
+ditado, repete, mais devagar, mais rápido, pausa e encerra sessão. O texto é dobrado para
+minúsculas sem acento — a transcrição não garante o acento — e um comando só vale como
+**ordem curta**: até 12 palavras, no começo da fala. "Você pode repetir o que eu disse
+sobre a prova de amanhã?" continua sendo pergunta, e há teste para cada caso.
+
+O que vem depois do comando viaja com ele: "olha minha tela **e explica esse slide**" vira
+a pergunta que acompanha a captura, sem o "e".
+
+### O log de sessão, e um bug que só existiria na máquina do usuário
+
+`Documents\VoxFlow\sessions\AAAA-MM-DD.md`, um arquivo por dia, escrito turno a turno —
+uma sessão que simplesmente é fechada ainda deixa tudo que foi dito.
+
+`AppPaths.session_dir` usava `Path.home()/"Documents"` desde a Fase 0. **Nesta máquina o
+Documentos real é `C:\Users\vinig\OneDrive\Documentos`**, e `~/Documents` também existe:
+os logs iriam para uma pasta que o usuário nunca abre, sem nada indicando o desvio.
+`documents_directory()` agora pergunta ao Windows (`SHGetKnownFolderPath`), com
+`VOXFLOW_DOCUMENTS_DIR` para testes. Verificado escrevendo e lendo um arquivo real.
+
+### Encerrar a sessão
+
+"encerra sessão" manda um último turno pedindo resumo e três perguntas de revisão, e o
+modo só desliga **depois** que ela termina de falar — `_closing_session` segura o
+desligamento até o TTS ficar ocioso, senão a fala morreria no meio.
+
+### Sondas deixadas no Hermes
+
+`voxflow:probe-fase5` e `voxflow:probe-desktop` ficaram no `state.db` desta verificação,
+somando-se às sondas antigas. Não apaguei nada: é o banco de outro aplicativo, e este
+projeto já aprendeu a não escrever nele sem pedir.
+
+### Arquivos alterados
+
+`src/voxflow/hermes/study.py` (novo), `src/voxflow/screenshot.py` (novo),
+`src/voxflow/paths.py`, `src/voxflow/config.py`, `src/voxflow/app.py`,
+`src/voxflow/hermes/client.py`, `src/voxflow/ui/settings.py`,
+`tests/test_study.py` (novo), `tests/test_screenshot_and_paths.py` (novo),
+`tests/test_documentation.py`, `docs/FASE_5_CHECKLIST_ACEITE.md` (novo), `README.md`,
+`PROMPT_INICIALIZACAO_PROXIMA_IA.md`.
+
+Validação: Ruff aprovado, 283 testes aprovados, captura real medida (1600×670, 157 KB,
+233 ms), turno com imagem respondido em 10,5 s pelo gateway real, turno pela ferramenta
+dela em 170 s com as oito mensagens gravadas na sessão, e o log escrito e lido no
+Documentos real.

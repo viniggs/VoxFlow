@@ -36,7 +36,7 @@ aqui significa apenas o preview na UI: nunca injete parciais no Notepad, Chrome 
 aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa visibilidade em
 todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco horas é crítico.
 
-A versão atual é **0.7.16**/Fase 4.5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
+A versão atual é **0.8.0**/Fase 5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
 SSE, painel de resposta, TTS por sentença, barge-in, half-duplex e controles de
 health/start/stop. Desde então mudaram coisas que as seções no fim deste arquivo
 detalham — leia-as antes de confiar em qualquer parágrafo anterior a elas.
@@ -369,3 +369,27 @@ painel emite, Ajustes salva, e `saved` devolve ao painel.
 Os controles da barra estão em **duas linhas** por medição, não por gosto: dois seletores
 e dois botões pedem 542 px num painel de 470, com larguras fixas — numa linha só, o
 último era cortado. `tests/test_listen_mode_panel.py` reprova quem voltar para uma linha.
+
+
+## Fase 5 e a captura de tela (0.8.0)
+
+`hermes/study.py` reconhece os comandos falados antes de enviar o turno, e escreve o log
+Markdown da sessão. Duas armadilhas medidas, não supostas:
+
+- **`/v1/runs` não aceita imagem.** O gateway resolve o input com
+  `raw_input[-1].get("content", "")` e o histórico com `str(entry["content"])`. Só
+  `/v1/responses` chama `_normalize_multimodal_content`. Não tente mandar imagem pelo
+  runs.
+- **A imagem enviada pelo `/v1/responses` não entra na sessão.** Conferido no `state.db`:
+  nenhum traço. Ela vive no `response_store.db`. Por isso o padrão é pedir que a **Friday
+  olhe com a ferramenta `computer_use` dela** — aí o turno, a chamada e a resposta ficam
+  na sessão, aparecem no app desktop do Hermes e ela pode voltar ao assunto. Custa 170 s
+  contra 10,5 s da captura local; a escolha é `hermes.screenshot_source`.
+
+A conversa do VoxFlow **já** vive no mesmo `state.db` do app desktop, com
+`source='api_server'`. A listagem de sessões só filtra por origem quando alguém pede.
+
+`AppPaths.session_dir` agora pergunta ao Windows onde fica Documentos
+(`SHGetKnownFolderPath`). `~/Documents` estava errado nesta máquina: o Documentos real é
+`OneDrive\Documentos`, e a pasta antiga também existe — os logs iriam para onde ninguém
+olha.

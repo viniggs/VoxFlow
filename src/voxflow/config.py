@@ -121,6 +121,19 @@ class HermesConfig(StrictModel):
     #: ``/v1/responses``. Kept switchable so the old path is one setting away.
     use_runs_api: bool = True
     attach_screenshot_on_command: bool = True
+    #: Who takes the picture when you say "olha minha tela".
+    #:
+    #: ``hermes_tool`` asks her to look with her own ``computer_use`` tool. That keeps
+    #: everything in one place: the turn, the tool call and the answer are written to
+    #: Hermes' own session store, so the exchange shows up in the Hermes desktop app and
+    #: she can refer back to what she saw.
+    #:
+    #: ``voxflow`` grabs the screen here and sends it inline. It has to go through
+    #: ``/v1/responses``, because ``/v1/runs`` reads its input with ``str(content)`` —
+    #: and that endpoint keeps its history in a different store, so the picture never
+    #: reaches the session. Measured, not assumed: an image sent that way left no trace
+    #: in ``state.db``. Kept for a Hermes without the tool.
+    screenshot_source: Literal["hermes_tool", "voxflow"] = "hermes_tool"
     #: Written for a tutor who is heard, not read. The length is left to the question:
     #: a fixed word cap made her cut explanations short exactly when depth was asked for.
     instructions: str = (

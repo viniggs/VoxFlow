@@ -39,14 +39,24 @@ def build_response_body(
     text: str,
     instructions: str,
     conversation_id: str,
+    image_data_url: str = "",
 ) -> dict[str, Any]:
-    """Build a Responses API request with explicit chat-turn semantics."""
+    """Build a Responses API request with explicit chat-turn semantics.
+
+    An image travels here and nowhere else. ``/v1/runs`` reads its input with
+    ``str(content)``, so a picture sent that way would arrive as the text of a Python
+    list; only this endpoint normalises ``input_image`` into the shape the agent's
+    vision path understands.
+    """
+    content: list[dict[str, Any]] = [{"type": "input_text", "text": text}]
+    if image_data_url:
+        content.append({"type": "input_image", "image_url": image_data_url})
     return {
         "model": "hermes-agent",
         "input": [
             {
                 "role": "user",
-                "content": [{"type": "input_text", "text": text}],
+                "content": content,
             }
         ],
         "instructions": instructions,
@@ -108,6 +118,7 @@ class HermesClient:
         instructions: str,
         on_delta: Callable[[str], None],
         cancel: Event,
+        image_data_url: str = "",
     ) -> HermesReply:
         started = time.perf_counter()
         first_delta = True
@@ -115,7 +126,9 @@ class HermesClient:
         response_id = ""
         last_delta_at = 0.0
         worst_gap = 0.0
-        body = build_response_body(text, instructions, self._conversation_id)
+        body = build_response_body(
+            text, instructions, self._conversation_id, image_data_url
+        )
         with (
             httpx.Client(timeout=httpx.Timeout(90.0, connect=5.0)) as client,
             client.stream(

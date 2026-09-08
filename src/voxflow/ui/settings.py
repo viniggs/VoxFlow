@@ -306,6 +306,11 @@ class SettingsWindow(CosmicPanel):
         self._listen_mode.setCurrentIndex(max(index, 0))
         self._attach_screenshot = QCheckBox("Permitir screenshot por comando")
         self._attach_screenshot.setChecked(self._config.hermes.attach_screenshot_on_command)
+        self._screenshot_source = QComboBox()
+        self._screenshot_source.addItem("Ela olha (fica no histórico dela)", "hermes_tool")
+        self._screenshot_source.addItem("VoxFlow captura (mais rápido)", "voxflow")
+        source_index = self._screenshot_source.findData(self._config.hermes.screenshot_source)
+        self._screenshot_source.setCurrentIndex(max(source_index, 0))
         self._tts_provider = QComboBox()
         for entry in tts_providers(kokoro_path=self._config.hermes.tts.kokoro_path):
             self._tts_provider.addItem(f"{entry.label}{entry.suffix}", entry.name)
@@ -351,6 +356,14 @@ class SettingsWindow(CosmicPanel):
         form.addRow("Conversa / histórico (conversation ID):", self._conversation_id)
         form.addRow("Half-duplex:", self._half_duplex)
         form.addRow("Screenshot:", self._attach_screenshot)
+        form.addRow("Quem olha a tela:", self._screenshot_source)
+        source_note = QLabel(
+            "Ela olhando: a captura e a resposta ficam na sessão do Hermes, "
+            "aparecem no app dele e ela pode voltar ao assunto — cerca de 170 s. "
+            "VoxFlow capturando: cerca de 10 s, mas a imagem não entra na sessão."
+        )
+        source_note.setWordWrap(True)
+        form.addRow("", source_note)
         form.addRow("Provider TTS:", self._tts_provider)
         form.addRow("", self._provider_note)
         group_row = QHBoxLayout()
@@ -715,6 +728,7 @@ class SettingsWindow(CosmicPanel):
                 "half_duplex": self._half_duplex.isChecked(),
                 "listen_mode": self._listen_mode.currentData(),
                 "attach_screenshot_on_command": self._attach_screenshot.isChecked(),
+                "screenshot_source": self._screenshot_source.currentData(),
                 "instructions": self._hermes_instructions.toPlainText().strip(),
                 "tts": tts,
             }
