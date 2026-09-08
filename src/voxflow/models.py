@@ -18,6 +18,13 @@ from loguru import logger
 
 #: What a slot in the application can consume.
 STT_FASTER_WHISPER = "stt_faster_whisper"
+#: A Whisper checkpoint in Transformers format. VoxFlow cannot load it directly, but it
+#: is one conversion away — which is the shape most Portuguese fine-tunes are published
+#: in, so saying "unknown" would hide the best models available.
+STT_WHISPER_TRANSFORMERS = "stt_whisper_transformers"
+#: Recognised speech models built on a runtime VoxFlow does not carry (NeMo, ONNX
+#: pipelines, audio LLMs). Named so the reason is visible rather than mysterious.
+STT_OTHER_RUNTIME = "stt_other_runtime"
 TTS_CHATTERBOX = "tts_chatterbox"
 TTS_QWEN3 = "tts_qwen3"
 AUDIO_SEPARATION = "audio_separation"
@@ -25,6 +32,8 @@ UNKNOWN = "unknown"
 
 KIND_LABELS = {
     STT_FASTER_WHISPER: "transcrição (faster-whisper)",
+    STT_WHISPER_TRANSFORMERS: "transcrição, precisa converter",
+    STT_OTHER_RUNTIME: "transcrição, outro runtime",
     TTS_CHATTERBOX: "voz (Chatterbox)",
     TTS_QWEN3: "voz (Qwen3-TTS)",
     AUDIO_SEPARATION: "separação de faixas (Demucs)",
@@ -119,6 +128,18 @@ def classify(folder: Path) -> tuple[str, str]:
     model_type = str(config.get("model_type", ""))
     if "tts" in model_type.lower() or "TTS" in architectures:
         return TTS_QWEN3, f"config.json model_type={model_type or 'desconhecido'}"
+
+    # Whisper in Transformers format: the shape almost every Portuguese fine-tune is
+    # published in. Loading needs a CTranslate2 conversion, not a different provider.
+    if model_type.lower() == "whisper" or "Whisper" in architectures:
+        return STT_WHISPER_TRANSFORMERS, "Whisper em formato Transformers"
+
+    if any(name.endswith(".nemo") for name in lowered):
+        return STT_OTHER_RUNTIME, "checkpoint NeMo (Parakeet/Nemotron)"
+    if any(name.endswith(".onnx") for name in lowered):
+        return STT_OTHER_RUNTIME, "modelo ONNX"
+    if "asr" in model_type.lower() or "ASR" in architectures or "Voxtral" in architectures:
+        return STT_OTHER_RUNTIME, f"config.json model_type={model_type or 'desconhecido'}"
 
     # Chatterbox ships its stages as separate checkpoints; both halves must be there.
     has_t3 = any(name.startswith("t3_") for name in lowered)

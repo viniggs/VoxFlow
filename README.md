@@ -75,3 +75,46 @@ uv run pytest
 
 Configurações ficam em `%APPDATA%\VoxFlow\config.yaml`, dados e logs em
 `%LOCALAPPDATA%\VoxFlow`, e segredos no Gerenciador de Credenciais do Windows.
+
+## Modelos de transcrição
+
+O VoxFlow transcreve com faster-whisper, que carrega **um formato só**: CTranslate2.
+Isso é o que decide se um modelo entra ou não, e não o quão bom ele é.
+
+A aba Ajustes → STT classifica o que está no seu cache em três situações:
+
+- **Pronto** — já está em CTranslate2 e aparece no seletor.
+- **Precisa converter** — é Whisper, mas em formato Transformers. Quase todo fine-tune
+  brasileiro é publicado assim. Uma conversão resolve, e ela é feita uma vez por modelo:
+
+  ```powershell
+  ./scripts/add-stt-model.ps1 -Model 'organizacao/nome-do-modelo'
+  ```
+
+  O resultado vai para `%LOCALAPPDATA%\VoxFlow\models`, que o app já varre — depois é
+  só usar **Procurar de novo** na aba STT.
+
+- **Outro runtime** — reconhecido como transcrição, mas construído sobre algo que o
+  VoxFlow não carrega.
+
+### Sobre as listas de "melhores modelos PT-BR"
+
+A regra é arquitetural, não de qualidade:
+
+| Família | Situação | Por quê |
+|---|---|---|
+| Whisper e seus fine-tunes (large-v3, WhisperX, variantes PT-BR) | conversível | mesma arquitetura, só muda o formato |
+| Parakeet, Nemotron e outros da NVIDIA | não carrega | são NeMo, uma stack inteira à parte |
+| Versões ONNX desses | não carrega | exigem um pipeline de decodificação próprio |
+| Qwen3-ASR, Voxtral e afins | não carrega | são LLMs de áudio, não modelos Whisper |
+
+Ou seja: das listas que circulam, **a coluna Whisper é a que dá para usar hoje**. Os
+demais não são piores — precisam de um segundo backend de transcrição no VoxFlow, que
+seria uma entrega própria.
+
+O script de conversão só entende Whisper. Se você apontá-lo para um Parakeet, ele falha
+dizendo exatamente isso, em vez de deixar meia pasta para trás.
+
+> A conversão empresta `transformers` e `torch` via `uv tool run` só enquanto roda. Eles
+> passam de 2 GB e **não** entram no ambiente do VoxFlow de propósito — o instalador tem
+> 97 MB e manteria isso.

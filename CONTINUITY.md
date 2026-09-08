@@ -852,3 +852,60 @@ para conversa ao vivo. É uma entrega própria.
 
 Validação: Ruff aprovado, 158 testes aprovados, SAPI sintetizado e reproduzido de ponta
 a ponta (241 ms de síntese, 133 ms até o primeiro áudio, realce correto).
+
+## 0.7.9 — Preparado para receber modelos de transcrição novos (2026-09-07)
+
+O usuário trouxe uma leaderboard de STT para PT-BR e pediu o ambiente preparado para
+adicionar um deles. A lista era de **transcrição**, não de voz — vale registrar, porque
+o pedido veio logo depois do trabalho de TTS.
+
+### O que decide se um modelo entra
+
+Não é qualidade: é formato. O faster-whisper carrega CTranslate2 e nada mais. Das
+famílias que aparecem nessas listas, só a do Whisper é alcançável hoje; Parakeet e
+Nemotron são NeMo, e Qwen3-ASR e Voxtral são LLMs de áudio. Nenhum deles roda sem um
+segundo backend de transcrição, que seria uma entrega própria.
+
+### Reconhecer em vez de dar de ombros
+
+`classify` ganhou duas categorias, porque `unknown` escondia justamente os melhores
+modelos disponíveis:
+
+- `stt_whisper_transformers` — Whisper em formato Transformers (`model_type=whisper`).
+  É como quase todo fine-tune brasileiro é publicado, e está a uma conversão de
+  funcionar.
+- `stt_other_runtime` — `.nemo`, `.onnx` ou config de ASR. Reconhecido, com o motivo
+  visível, mas fora do seletor.
+
+Reconhecer não é oferecer: ambos continuam fora da lista de escolha, porque nenhum
+carrega hoje. Há teste para exatamente isso.
+
+### A conversão
+
+`scripts/add-stt-model.ps1` roda `ct2-transformers-converter` — que já existe no venv,
+vindo do faster-whisper — mas `transformers` e `torch` **não** são dependências do app.
+Eles passam de 2 GB e o instalador tem 97 MB. O script os empresta por meio de
+`uv tool run` só durante a conversão.
+
+O destino é `%LOCALAPPDATA%\VoxFlow\models\<nome>`, que `discover()` já varre, então o
+resultado aparece como qualquer outro modelo. `--copy_files tokenizer.json
+preprocessor_config.json` é obrigatório: sem eles o faster-whisper carrega os pesos e
+não sabe transformar áudio em features nem números em texto.
+
+O script falha limpo e apaga a pasta parcial quando o modelo não é Whisper, explicando o
+motivo em vez de deixar meia conversão para trás.
+
+### Não verificado
+
+**Nenhuma conversão real foi executada** — exigiria baixar transformers, torch e um
+modelo de vários GB. Foram verificados: a existência de `ct2-transformers-converter.exe`
+no venv, a disponibilidade de `uv tool run`, e a sintaxe do script pelo parser do
+PowerShell. O primeiro uso real é o teste de verdade.
+
+### Arquivos alterados
+
+`src/voxflow/models.py`, `src/voxflow/ui/settings.py`,
+`scripts/add-stt-model.ps1` (novo), `tests/test_models.py`, `README.md`.
+
+Validação: Ruff aprovado, 163 testes aprovados, script validado pelo parser do
+PowerShell.

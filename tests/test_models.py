@@ -13,6 +13,8 @@ from pathlib import Path
 from voxflow.models import (
     AUDIO_SEPARATION,
     STT_FASTER_WHISPER,
+    STT_OTHER_RUNTIME,
+    STT_WHISPER_TRANSFORMERS,
     TTS_CHATTERBOX,
     TTS_QWEN3,
     UNKNOWN,
@@ -157,3 +159,64 @@ def test_size_is_reported(tmp_path: Path) -> None:
     make(tmp_path, "org--whisper", {"model.bin": "x" * 500, "vocabulary.json": "[]"})
     found = discover([tmp_path])
     assert found[0].size_bytes >= 500
+
+
+# --- the other speech formats, named instead of dismissed ------------------------
+
+
+def test_a_transformers_whisper_is_marked_convertible(tmp_path: Path) -> None:
+    # Almost every Portuguese fine-tune is published this way. Calling it "unknown"
+    # would hide the best models behind a shrug.
+    folder = make(
+        tmp_path,
+        "org--whisper-large-v3-ptbr",
+        {
+            "config.json": json.dumps(
+                {"model_type": "whisper", "architectures": ["WhisperForConditionalGeneration"]}
+            ),
+            "model.safetensors": "x",
+        },
+    )
+    kind, evidence = classify(folder)
+    assert kind == STT_WHISPER_TRANSFORMERS
+    assert "Transformers" in evidence
+
+
+def test_a_nemo_checkpoint_says_which_runtime_it_needs(tmp_path: Path) -> None:
+    folder = make(tmp_path, "nvidia--parakeet-tdt", {"parakeet.nemo": "x"})
+    kind, evidence = classify(folder)
+    assert kind == STT_OTHER_RUNTIME
+    assert "NeMo" in evidence
+
+
+def test_an_onnx_model_is_recognised_as_another_runtime(tmp_path: Path) -> None:
+    folder = make(tmp_path, "org--parakeet-onnx", {"model.onnx": "x"})
+    assert classify(folder)[0] == STT_OTHER_RUNTIME
+
+
+def test_convertible_and_foreign_models_are_still_kept_out_of_the_picker(
+    tmp_path: Path,
+) -> None:
+    # Recognising them is not the same as offering them: neither one loads today.
+    make(
+        tmp_path,
+        "org--whisper-ptbr",
+        {"config.json": json.dumps({"model_type": "whisper"}), "model.safetensors": "x"},
+    )
+    make(tmp_path, "nvidia--parakeet", {"parakeet.nemo": "x"})
+    make(tmp_path, "org--ready", {"model.bin": "x", "vocabulary.json": "[]"})
+    usable = for_slot(discover([tmp_path]), STT_FASTER_WHISPER)
+    assert [item.repo_id for item in usable] == ["org/ready"]
+
+
+def test_a_converted_model_is_indistinguishable_from_a_downloaded_one(tmp_path: Path) -> None:
+    # What the conversion script produces: a flat folder under VoxFlow's model root.
+    converted = tmp_path / "whisper-large-v3-ptbr"
+    converted.mkdir()
+    (converted / "model.bin").write_text("x", encoding="utf-8")
+    (converted / "vocabulary.json").write_text("[]", encoding="utf-8")
+    (converted / "tokenizer.json").write_text("{}", encoding="utf-8")
+    found = discover([tmp_path])
+    assert [(item.repo_id, item.kind) for item in found] == [
+        ("whisper-large-v3-ptbr", STT_FASTER_WHISPER)
+    ]

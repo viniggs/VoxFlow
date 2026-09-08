@@ -361,3 +361,21 @@ Data: 2026-09-07
 
 - [ ] Guardar a chave, reabrir Ajustes e confirmar que OpenAI deixa de estar
   *(indisponível)* e oferece Alloy/Echo/Fable/Onyx/Nova/Shimmer.
+
+---
+
+# VoxFlow 0.7.9 — Preparo para modelos de transcrição novos
+
+Data: 2026-09-07
+
+- [ ] Ajustes → STT: confirmar que a nota continua listando os modelos do cache por
+  categoria, e que nada mudou no que já funcionava.
+- [ ] Baixar um Whisper em formato Transformers (por exemplo `openai/whisper-small`) e
+  confirmar que ele aparece na nota como **"precisa converter"**, e **não** no seletor.
+- [ ] Rodar `./scripts/add-stt-model.ps1 -Model 'openai/whisper-small'` e confirmar que
+  a conversão termina gerando `model.bin`. **Este é o teste que nunca foi executado.**
+- [ ] Clicar em **Procurar de novo** e confirmar que o modelo convertido aparece no
+  seletor como pronto.
+- [ ] Selecioná-lo, salvar e **ditar**, confirmando que a transcrição funciona com ele.
+- [ ] Apontar o script para um modelo que não é Whisper (por exemplo um Parakeet) e
+  confirmar que ele falha explicando o motivo e **não deixa pasta pela metade**.

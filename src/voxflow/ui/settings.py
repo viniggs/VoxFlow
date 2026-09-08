@@ -28,7 +28,13 @@ from voxflow.autostart import set_autostart
 from voxflow.config import AppConfig, save_config
 from voxflow.hermes.voices import providers as tts_providers
 from voxflow.hermes.voices import voices_for
-from voxflow.models import STT_FASTER_WHISPER, LocalModel, discover, for_slot
+from voxflow.models import (
+    STT_FASTER_WHISPER,
+    STT_WHISPER_TRANSFORMERS,
+    LocalModel,
+    discover,
+    for_slot,
+)
 from voxflow.paths import AppPaths
 from voxflow.secrets import SecretStore
 from voxflow.ui.cosmos import CosmicPanel
@@ -400,6 +406,12 @@ class SettingsWindow(CosmicPanel):
         lines = [head]
         for label, names in sorted(others.items()):
             lines.append(f"Não servem aqui — {label}: {', '.join(sorted(names))}.")
+        if any(item.kind == STT_WHISPER_TRANSFORMERS for item in found):
+            # These are one conversion away, and it is worth saying where that lives.
+            lines.append(
+                "Os de “precisa converter” são Whisper em formato Transformers: "
+                "rode scripts\\add-stt-model.ps1 para trazê-los."
+            )
         return "\n".join(lines)
 
     def _on_model_picked(self, index: int) -> None:
