@@ -12,7 +12,19 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
-      - run: uv sync --extra dev
+      # `dev` alone is not enough, and the first run of this workflow proved it: a
+      # developer's own .venv has the extras installed, so the suite passed locally
+      # while `pytest-qt` refused to collect anything here for want of a Qt binding.
+      #
+      # `desktop` carries PySide6 and httpx, which the widget and gateway tests import.
+      # `kokoro` carries the package whose absence would turn the probe test into a
+      # failure — the one guarding that asking whether Kokoro is available never loads
+      # the 82M ONNX graph. Skipping it on the machine that runs every commit would
+      # retire the guard rather than satisfy it.
+      #
+      # The remaining extras stay out on purpose: the tests reach the transcription and
+      # cloud providers through injected factories, never through the real packages.
+      - run: uv sync --extra dev --extra desktop --extra kokoro
       - run: uv run ruff check .
+      # conftest.py pins QT_QPA_PLATFORM=offscreen, so no desktop session is needed.
       - run: uv run pytest
-

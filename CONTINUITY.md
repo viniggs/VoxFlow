@@ -1232,3 +1232,46 @@ Era um erro de processo, não de intenção, e por isso disciplina não bastou.
 
 Validação: Ruff aprovado, 227 testes aprovados, e o guarda exercitado contra uma versão
 falsa para confirmar que ele realmente reprova.
+
+## O repositório foi para o GitHub, e o CI rodou pela primeira vez (2026-09-08)
+
+O usuário pediu para subir o projeto e dar acesso a um amigo. Antes do push, o histórico
+inteiro foi varrido por segredos (`sk-`, `ghp_`, `xox`, `Bearer`, `API_SERVER_KEY`),
+por `.env`/`config.yaml` versionados e por caminhos com o nome do usuário: nada. Os
+`releases/`, `dist/` e `build/` já estavam ignorados, então o repositório publicado tem
+111 arquivos e 626 KiB, sem instaladores nem modelos.
+
+Remoto: `https://github.com/viniggs/VoxFlow`, **privado**, `main`, 54 commits.
+
+### O CI nunca tinha sido executado
+
+`.github/workflows/ci.yml` existe desde a Fase 0, mas não havia remoto — então o
+primeiro push foi também a primeira execução, e ela **falhou**:
+
+```
+ERROR: pytest-qt requires either PySide6, PyQt5 or PyQt6 installed.
+```
+
+`uv sync --extra dev` instala pytest, pytest-qt e Ruff, e mais nada. O `.venv` de quem
+desenvolve tem os extras, então a suíte passava aqui e a lacuna ficou invisível por sete
+fases. É a mesma classe de erro da 0.7.5 — algo que era verdade só na máquina de origem.
+
+Reproduzido num venv isolado (`UV_PROJECT_ENVIRONMENT` apontando para fora do projeto,
+sem tocar no `.venv` do usuário), o que os testes realmente exigem:
+
+| Extra | Por quê |
+|---|---|
+| `dev` | pytest, pytest-qt, Ruff |
+| `desktop` | PySide6 e httpx — as janelas e o cliente do gateway |
+| `kokoro` | sem o pacote, `KokoroSynthesizer.available()` é falso e o teste que garante que a sonda **não** carrega o ONNX de 82M falha |
+
+Os demais extras ficam de fora de propósito: os testes alcançam transcrição e provedores
+de nuvem por fábricas injetadas, nunca pelos pacotes reais. Medido: com `dev` +
+`desktop`, 230 passam e 1 falha (o do Kokoro); com os três, **231 passam** e o Ruff passa.
+
+`conftest.py` já fixa `QT_QPA_PLATFORM=offscreen`, então o runner não precisa de sessão
+gráfica.
+
+### Arquivos alterados
+
+`.github/workflows/ci.yml`.
