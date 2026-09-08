@@ -732,3 +732,62 @@ modificadores presos por outro motivo, usado só para o cancelamento.
 
 Validação: Ruff aprovado, 121 testes aprovados, aba Atalhos renderizada e ciclo
 salvar/ler conferido (`ctrl+a`, `f8`, 1500 ms, `push_to_talk`).
+
+## 0.7.7 — Seleção de modelos por compatibilidade (2026-09-07)
+
+O campo "Modelo" do STT era texto livre com `large-v3-turbo` escrito à mão. O usuário
+tem nove modelos no cache do HuggingFace e queria escolher entre eles — mas só entre os
+que aquele lugar consegue carregar.
+
+### Classificação por evidência, não por nome
+
+`src/voxflow/models.py` (novo) olha o que cada pasta realmente contém:
+
+| Formato | O que denuncia |
+|---|---|
+| `stt_faster_whisper` | `model.bin` + `vocabulary.*` (formato CTranslate2) |
+| `tts_qwen3` | `config.json` com `model_type` contendo `tts` |
+| `tts_chatterbox` | checkpoints `t3_*` **e** `s3gen*` |
+| `audio_separation` | receita `.yaml` do Demucs |
+| `unknown` | qualquer outra coisa |
+
+Nome de repositório não decide nada de propósito: `openai/whisper-large-v3` parece
+servir para transcrição e o faster-whisper não carrega — é Transformers, não
+CTranslate2. Há teste para exatamente esse engano.
+
+Metade de um Chatterbox (só `t3_*`, sem `s3gen*`) é reportada como incompleta em vez de
+oferecida, porque falharia no carregamento sem nada legível para ler.
+
+### Na interface
+
+Aba STT: "Modelo instalado" lista só os compatíveis, com tamanho, mais "Outro
+(informar manualmente)" para baixar por nome numa máquina sem cache. Os campos de nome
+e pasta ficam desabilitados quando um modelo da lista está escolhido, para não
+divergirem dele. Uma nota diz quantos foram encontrados e por que os outros não servem
+— era o "como saber o que é compatível" que o usuário perguntou.
+
+`activated` e não `currentIndexChanged`: o segundo dispara ao reconstruir a lista e
+reescreveria a configuração sem ninguém ter escolhido nada.
+
+Varredura custa 14 ms, medidos, então roda na construção. O botão **Procurar de novo**
+é explícito porque uma revarredura automática a cada abertura descartaria uma escolha
+ainda não salva.
+
+### Achado colateral
+
+O seletor de provedor de TTS (`edge`/`openai`/`sapi`/`chatterbox`) **não faz nada**:
+`chatterbox` só aparece em `config.py` e `settings.py`, e `_create_speaker` devolve
+`EdgeSentenceSpeaker` em qualquer caso. Não foi mexido nesta entrega, mas está
+registrado — oferecer escolha de modelo de voz antes de resolver isso seria construir
+sobre nada.
+
+Também removido um resquício: a aba Geral ainda anunciava `Ctrl + Numpad +` fixo,
+desatualizado desde que os atalhos viraram configuráveis em 0.7.6.
+
+### Arquivos alterados
+
+`src/voxflow/models.py` (novo), `src/voxflow/ui/settings.py`,
+`tests/test_models.py` (novo).
+
+Validação: Ruff aprovado, 133 testes aprovados, aba STT renderizada com 2 de 9 modelos
+oferecidos e os 7 restantes explicados por categoria.

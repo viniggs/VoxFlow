@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 
 from voxflow.autostart import set_autostart
 from voxflow.config import AppConfig, save_config
+from voxflow.models import STT_FASTER_WHISPER, LocalModel, discover, for_slot
 from voxflow.paths import AppPaths
 from voxflow.secrets import SecretStore
 from voxflow.ui.cosmos import CosmicPanel
@@ -115,7 +116,7 @@ class SettingsWindow(CosmicPanel):
         self._sounds = QCheckBox("Tocar sons ao iniciar e concluir ditados")
         self._sounds.setChecked(self._config.general.sounds)
         form.addRow("Idioma:", self._language)
-        form.addRow("Atalho:", QLabel("Ctrl + Numpad +"))
+        form.addRow("Atalhos:", QLabel("Configuráveis na aba Atalhos"))
         form.addRow("Inicialização:", self._autostart)
         form.addRow("Sons:", self._sounds)
         self._tabs.addTab(tab, "Geral")
@@ -170,6 +171,14 @@ class SettingsWindow(CosmicPanel):
 
     def _build_stt_tab(self) -> None:
         tab, form = self._form_tab()
+        self._model_choice = QComboBox()
+        self._model_choice.activated.connect(self._on_model_picked)
+        self._models_note = QLabel("")
+        self._models_note.setWordWrap(True)
+        self._models_note.setStyleSheet(
+            f"color: {rgba(TEXT_FAINT)}; font-size: 11px; background: transparent;"
+        )
+        self._usable_models: list[LocalModel] = []
         self._local_model = QLineEdit(self._config.stt.local_model)
         self._model_cache = QLineEdit(self._config.stt.local_model_cache)
         self._stt_device = QComboBox()
@@ -177,8 +186,20 @@ class SettingsWindow(CosmicPanel):
         self._stt_device.setCurrentText(self._config.stt.local_device)
         self._compute_type = QLineEdit(self._config.stt.local_compute_type)
         form.addRow("Provider ativo:", QLabel("Faster Whisper local"))
-        form.addRow("Modelo:", self._local_model)
-        form.addRow("Cache do modelo:", self._model_cache)
+        rescan = QPushButton("Procurar de novo")
+        rescan.setProperty("role", "ghost")
+        # Explicit rather than automatic on every open: a rescan rebuilds the list, and
+        # doing that silently would throw away a choice not yet saved.
+        rescan.clicked.connect(self._reload_models)
+        chooser = QHBoxLayout()
+        chooser.setContentsMargins(0, 0, 0, 0)
+        chooser.addWidget(self._model_choice, 1)
+        chooser.addWidget(rescan)
+        form.addRow("Modelo instalado:", chooser)
+        form.addRow("Nome do modelo:", self._local_model)
+        form.addRow("Pasta do modelo:", self._model_cache)
+        form.addRow(self._models_note)
+        self._reload_models()
         form.addRow("Dispositivo:", self._stt_device)
         form.addRow("Precisão:", self._compute_type)
         self._tabs.addTab(tab, "STT")
@@ -324,6 +345,64 @@ class SettingsWindow(CosmicPanel):
         layout.addWidget(button)
         layout.addStretch()
         self._tabs.addTab(tab, "Histórico")
+
+    def _reload_models(self) -> None:
+        """List what is on disk, offering only what this slot can load."""
+
+        found = discover()
+        self._usable_models = for_slot(found, STT_FASTER_WHISPER)
+        configured = str(self._config.stt.local_model_cache or "").strip().lower()
+        self._model_choice.clear()
+        for model in self._usable_models:
+            self._model_choice.addItem(model.label, str(model.path))
+        self._model_choice.addItem("Outro (informar manualmente)…", "")
+        chosen = next(
+            (
+                index
+                for index, model in enumerate(self._usable_models)
+                if str(model.path).lower() == configured
+            ),
+            len(self._usable_models),
+        )
+        self._model_choice.setCurrentIndex(chosen)
+        # The text fields are only editable when nothing on disk was picked; otherwise
+        # they show what the choice resolved to, and are not left to drift from it.
+        manual = chosen == len(self._usable_models)
+        self._local_model.setEnabled(manual)
+        self._model_cache.setEnabled(manual)
+        self._models_note.setText(self._models_summary(found))
+
+    def _models_summary(self, found: list[LocalModel]) -> str:
+        if not found:
+            return (
+                "Nenhum modelo encontrado no cache. Informe um nome e ele será baixado "
+                "na primeira transcrição."
+            )
+        head = (
+            f"{len(self._usable_models)} de {len(found)} modelos no seu cache servem "
+            "para transcrição."
+        )
+        others: dict[str, list[str]] = {}
+        for model in found:
+            if model.kind == STT_FASTER_WHISPER:
+                continue
+            others.setdefault(model.kind_label, []).append(model.repo_id)
+        lines = [head]
+        for label, names in sorted(others.items()):
+            lines.append(f"Não servem aqui — {label}: {', '.join(sorted(names))}.")
+        return "\n".join(lines)
+
+    def _on_model_picked(self, index: int) -> None:
+        """Only fires when a person chooses, never when the list is rebuilt."""
+
+        manual = index >= len(self._usable_models)
+        self._local_model.setEnabled(manual)
+        self._model_cache.setEnabled(manual)
+        if manual:
+            return
+        model = self._usable_models[index]
+        self._local_model.setText(model.repo_id)
+        self._model_cache.setText(str(model.path))
 
     @staticmethod
     def _form_tab() -> tuple[QWidget, QFormLayout]:

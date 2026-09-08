@@ -307,3 +307,26 @@ Data: 2026-09-07
   página dá zoom junto.** Se der, me avisar: a regra "só engolir tecla que escreve
   sozinha" foi implementada como pedida, e é isso que deixa o `Ctrl +` chegar no
   navegador. Inverter é rápido.
+
+---
+
+# VoxFlow 0.7.7 — Seleção de modelos
+
+Data: 2026-09-07
+
+- [ ] Ajustes → **STT**: confirmar que "Modelo instalado" lista os modelos de
+  transcrição do seu cache com o tamanho, e que o atual já vem selecionado.
+- [ ] Confirmar que a nota abaixo lista os outros modelos do cache separados por
+  categoria (Demucs, Chatterbox, Qwen3-TTS) e que **nenhum deles** aparece no seletor.
+- [ ] Confirmar que "Nome do modelo" e "Pasta do modelo" estão desabilitados enquanto um
+  modelo da lista estiver escolhido.
+- [ ] Escolher **Outro (informar manualmente)** e confirmar que os dois campos voltam a
+  ser editáveis.
+- [ ] Trocar para o outro modelo de transcrição da lista, salvar, reabrir Ajustes e
+  confirmar que a escolha permaneceu.
+- [ ] **Ditar depois de trocar** e confirmar que a transcrição continua funcionando —
+  é o teste que importa, porque o caminho de resolução do modelo mudou de campo.
+- [ ] Baixar um modelo novo com o app aberto, clicar em **Procurar de novo** e confirmar
+  que ele aparece.
+- [ ] Aba Geral: confirmar que "Atalhos" agora aponta para a aba Atalhos em vez de
+  anunciar `Ctrl + Numpad +`.
