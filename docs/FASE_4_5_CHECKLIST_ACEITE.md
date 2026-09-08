@@ -508,7 +508,7 @@ sair com documentação desatualizada, mais as correções que ele apontou.
 
 ---
 
-# VoxFlow 0.7.15+ — Realce sincronizado e modo de escuta no painel
+# VoxFlow 0.7.16 — Realce sincronizado e modo de escuta no painel
 
 Data: 2026-09-08
 

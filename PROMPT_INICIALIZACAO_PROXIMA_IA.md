@@ -36,7 +36,7 @@ aqui significa apenas o preview na UI: nunca injete parciais no Notepad, Chrome 
 aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa visibilidade em
 todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco horas é crítico.
 
-A versão atual é **0.7.15**/Fase 4.5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
+A versão atual é **0.7.16**/Fase 4.5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
 SSE, painel de resposta, TTS por sentença, barge-in, half-duplex e controles de
 health/start/stop. Desde então mudaram coisas que as seções no fim deste arquivo
 detalham — leia-as antes de confiar em qualquer parágrafo anterior a elas.
@@ -341,3 +341,31 @@ e checklist eram atualizados por serem registro de entrega, enquanto este arquiv
 README descrevem o presente — e toda mudança de comportamento os tornava falsos sem nada
 falhar. Se você criar outro documento que descreva o estado atual, acrescente-o a esse
 teste.
+
+
+## O realce das palavras, e por que ele não é do provider de voz (0.7.16)
+
+O realce cor-de-rosa corria na frente da voz. Quatro medições descartaram os suspeitos
+naturais: o clipe do Kokoro tem 2% de silêncio nas pontas; este export ONNX não publica
+durações (`has_timings=False`), então estimar é obrigatório; o estimador erra no máximo
+140 ms; e o MCI reporta a posição em milissegundos, fiel ao relógio, em WAV e MP3.
+
+O defeito era o acoplamento: o laço amostra a cada 40 ms e mandava o **texto** da palavra
+toda vez, enquanto `Bubble.highlight_word` procura a **próxima** ocorrência. Uma palavra
+de 200 ms era anunciada cinco vezes e o realce caminhava para os cinco "a" seguintes.
+`SpeechCursor` anuncia por **índice**, uma vez por palavra. Valia igual no Edge — não era
+do Kokoro.
+
+Se for mexer no realce: a amplitude precisa continuar saindo a cada amostra, senão o orbe
+perde o envelope. Só o nome da palavra é que sai uma vez.
+
+## O modo de escuta mora em dois lugares (0.7.16)
+
+`hermes.listen_mode` já existia desde a 0.7.6, mas só em Ajustes → Hermes. O usuário
+procurou o controle na barra sob o orbe, ao lado da voz, não achou, e concluiu que a
+funcionalidade não existia. Agora está nos dois lugares, com a mesma volta da voz: o
+painel emite, Ajustes salva, e `saved` devolve ao painel.
+
+Os controles da barra estão em **duas linhas** por medição, não por gosto: dois seletores
+e dois botões pedem 542 px num painel de 470, com larguras fixas — numa linha só, o
+último era cortado. `tests/test_listen_mode_panel.py` reprova quem voltar para uma linha.

@@ -1,11 +1,11 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-08
-Versão: 0.7.15
+Versão: 0.7.16
 Fase concluída no código: Fase 4.5, aguardando aceite manual
-Instalador mais recente gerado: 0.7.14 (`releases/fase-4.5/0.7.14/`)
-Versão instalada nesta máquina: 0.7.13 — a 0.7.14 nunca foi instalada e a 0.7.15
-ainda não tem instalador. O aceite da Fase 4.5 está pendente.
+Instalador mais recente gerado: 0.7.16 (`releases/fase-4.5/0.7.16/`)
+O aceite da Fase 4.5 está pendente: a 0.7.16 fecha os itens de 0.7.13 a 0.7.15,
+que nunca chegaram a ser exercitados numa instalação.
 
 ## Objetivo
 
@@ -1333,7 +1333,7 @@ passado por `providers()`, `available()`, `_kokoro_available()` e `_kokoro_detai
 Validação: Ruff aprovado, 233 testes aprovados, sonda medida no executável empacotado e
 o teste novo exercitado contra o defeito para confirmar que ele reprova.
 
-## O realce que corria na frente, e o modo de escuta no painel (2026-09-08)
+## 0.7.16 — O realce que corria na frente, e o modo de escuta no painel (2026-09-08)
 
 Dois pedidos do usuário: o realce cor-de-rosa das palavras estava "completamente
 dessincronizado", e o modo push-to-talk parecia não existir.
