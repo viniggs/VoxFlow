@@ -1,8 +1,11 @@
 # VoxFlow — Continuidade do projeto
 
-Atualizado em: 2026-09-07
-Versão: 0.7.2
+Atualizado em: 2026-09-08
+Versão: 0.7.15
 Fase concluída no código: Fase 4.5, aguardando aceite manual
+Instalador mais recente gerado: 0.7.14 (`releases/fase-4.5/0.7.14/`)
+Versão instalada nesta máquina: 0.7.13 — a 0.7.14 nunca foi instalada e a 0.7.15
+ainda não tem instalador. O aceite da Fase 4.5 está pendente.
 
 ## Objetivo
 

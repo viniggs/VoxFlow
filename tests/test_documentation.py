@@ -36,6 +36,22 @@ def test_continuity_has_a_section_for_this_version() -> None:
     )
 
 
+def test_the_continuity_header_announces_this_version() -> None:
+    # The 0.7.15 guard only looked for a section per version, so the header block kept
+    # its own version number and went stale unnoticed: it announced 0.7.2 while the
+    # file already described 0.7.15. The header is what a reader sees first, so a wrong
+    # number there misleads before any section is reached.
+    text = read(CONTINUITY)
+    match = re.search(r"^Versão: ([0-9.]+)$", text, re.MULTILINE)
+    assert match is not None, (
+        "Não achei a linha 'Versão: X' no cabeçalho do CONTINUITY.md."
+    )
+    assert match.group(1) == __version__, (
+        f"O cabeçalho do CONTINUITY.md anuncia {match.group(1)} "
+        f"e o código está em {__version__}."
+    )
+
+
 def test_the_checklist_has_a_section_for_this_version() -> None:
     # A release with nothing to test by hand still needs to say so, rather than being
     # quietly absent and indistinguishable from a forgotten one.
