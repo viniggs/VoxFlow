@@ -4,14 +4,20 @@ VoxFlow será um aplicativo Windows de ditado universal e estudo por voz integra
 
 ## Estado atual
 
-Fase 4.5: ditado universal, interface em torno do orbe da Friday renderizado na GPU,
-e modo Hermes hands-free com raciocínio visível.
+Fase 4.5: ditado universal, interface em torno do orbe da Friday renderizado na GPU, e
+modo Hermes com raciocínio visível — ouvindo sozinha ou só quando você segura o atalho.
 
 Segure `Ctrl + Numpad +`, fale e solte. O preview aparece somente no VoxFlow;
 o texto final é inserido no aplicativo ativo depois que o atalho é solto.
 
 Pressione `F9` para entrar no modo Hermes. O painel mostra o que ela está pensando
 enquanto pensa, e a resposta conforme ela chega.
+
+O pensamento depende de um plugin instalado no Hermes, em
+`%LOCALAPPDATA%\hermes\plugins\voxflow-reasoning\`, que escreve os deltas de raciocínio
+em `%LOCALAPPDATA%\VoxFlow\reasoning\stream.jsonl`. Sem ele o resto funciona igual. O
+plugin acompanha o VoxFlow: se não estiver instalado, o assistente de configuração
+oferece um botão para copiá-lo, e depois basta reiniciar o Hermes.
 
 Ela ouve de duas maneiras, escolhidas em Ajustes → Hermes → **Como ela ouve**:
 
@@ -40,11 +46,24 @@ Combinações com Ctrl, Alt, Shift ou Win continuam chegando normalmente no apli
 uso, então usar `Ctrl + A` como atalho não custa a você o Ctrl nem o "selecionar tudo".
 O próprio campo avisa qual dos dois casos é o seu.
 
-O pensamento depende de um plugin instalado no Hermes, em
-`%LOCALAPPDATA%\hermes\plugins\voxflow-reasoning\`, que escreve os deltas de raciocínio
-em `%LOCALAPPDATA%\VoxFlow\reasoning\stream.jsonl`. Sem ele o resto funciona igual. O
-plugin acompanha o VoxFlow: se não estiver instalado, o assistente de configuração
-oferece um botão para copiá-lo, e depois basta reiniciar o Hermes.
+## A voz da Friday
+
+Em Ajustes → Hermes → **Provider TTS**:
+
+- **Edge** — online e gratuito, sem conta. É o padrão, e o único que informa onde cada
+  palavra cai, então o realce palavra por palavra é exato.
+- **Windows (offline)** — usa as vozes que já existem no seu Windows. Não depende de
+  rede e responde mais rápido que o Edge.
+- **OpenAI** — exige uma chave guardada nos segredos; enquanto não houver, aparece
+  marcado como indisponível.
+- **Chatterbox** — ainda não integrado, e o motivo aparece na própria tela.
+
+A lista de vozes é sempre a do provider escolhido: um nome do Edge não significa nada
+para o Windows. Trocar de provider reconstrói a lista tanto em Ajustes quanto na barra
+de controles sob a Friday.
+
+Nos providers que não informam limites de palavra, o realce é distribuído sobre a
+duração real do áudio, então ele continua acompanhando a fala em vez de ficar parado.
 
 ## Instalar em outro computador
 
@@ -117,4 +136,4 @@ dizendo exatamente isso, em vez de deixar meia pasta para trás.
 
 > A conversão empresta `transformers` e `torch` via `uv tool run` só enquanto roda. Eles
 > passam de 2 GB e **não** entram no ambiente do VoxFlow de propósito — o instalador tem
-> 97 MB e manteria isso.
+> 100 MB e manteria isso.

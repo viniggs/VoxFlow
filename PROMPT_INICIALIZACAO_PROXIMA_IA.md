@@ -36,12 +36,14 @@ aqui significa apenas o preview na UI: nunca injete parciais no Notepad, Chrome 
 aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa visibilidade em
 todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco horas é crítico.
 
-A versão atual é 0.7.0/Fase 4.5. Ela acrescenta modo Hermes hands-free em `F9`, VAD,
-`/v1/responses` com SSE, painel de resposta, Edge TTS por sentença, barge-in, half-duplex e
-controles de health/start/stop. A API local do Hermes já foi habilitada em `127.0.0.1:8642`;
+A versão atual é **0.7.10**/Fase 4.5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
+SSE, painel de resposta, TTS por sentença, barge-in, half-duplex e controles de
+health/start/stop. Desde então mudaram coisas que as seções no fim deste arquivo
+detalham — leia-as antes de confiar em qualquer parágrafo anterior a elas.
+A API local do Hermes já foi habilitada em `127.0.0.1:8642`;
 a chave está no `.env` do Hermes e no Windows Credential Manager, nunca em arquivos do repo.
-O TTS padrão atual é `pt-BR-ThalitaMultilingualNeural`; a aba Hermes possui um dropdown
-editável com Thalita, Francisca e Antônio. O painel mostra a voz carregada. A síntese das frases
+O TTS padrão atual é `pt-BR-ThalitaMultilingualNeural`, mas o provider e a lista de vozes
+deixaram de ser fixos na 0.7.8. O painel mostra a voz carregada. A síntese das frases
 é pré-gerada em paralelo ao playback para evitar pausas artificiais; o instalador encerra a
 instância anterior antes de substituir os arquivos. A memória contínua da Friday deve ser
 preservada; não apagar histórico ou sessão sem solicitação explícita do usuário.
@@ -57,8 +59,9 @@ novo contexto no futuro, altere somente o `conversation_id`, sem apagar o anteri
 O seletor de voz também está diretamente no painel `Hermes ao vivo`; selecionar uma voz ali
 salva e aplica a escolha. A aba Hermes de Configurações continua oferecendo o mesmo controle.
 
-Ao assumir, confirme primeiro se a entrega 0.7.0/Fase 4.5 descrita no `CONTINUITY.md` foi instalada
-e aceita usando `docs\FASE_4_5_CHECKLIST_ACEITE.md`. Se houver erro, leia o painel e
+Ao assumir, confirme primeiro o aceite da Fase 4/4.5 com o usuário: as entregas 0.7.0 a
+0.7.10 estão empilhadas e **nenhuma foi aceita ainda**. Use
+`docs\FASE_4_5_CHECKLIST_ACEITE.md`, que tem uma seção por versão. Se houver erro, leia o painel e
 `%LOCALAPPDATA%\VoxFlow\logs\voxflow.log`, corrija apenas a causa concreta e regenere a entrega.
 Não avance para a Fase 5 sem OK.
 
@@ -81,7 +84,10 @@ descobrir:
    removidas. O pensamento real chega por um plugin do Hermes que escreve
    `%LOCALAPPDATA%\VoxFlow\reasoning\stream.jsonl`, lido por `hermes/reasoning.py`.
    Se o pensamento parar de aparecer, conferir primeiro
-   `~/.hermes/plugins/voxflow-reasoning/` e `plugins.stream_reasoning_deltas: true`.
+   `%LOCALAPPDATA%\hermes\plugins\voxflow-reasoning\` e
+   `plugins.stream_reasoning_deltas: true`. **Não é `~/.hermes/plugins/`** — essa era a
+   grafia errada que este arquivo trazia até a 0.7.10, e seguir por ela instala o plugin
+   num lugar onde o Hermes não olha.
 
 Antes de culpar o TTS ou a interface por um travamento, olhe `hermes_delta_gap` no log:
 ele registra silêncios dentro de uma resposta. Uma investigação inteira já foi gasta
@@ -101,31 +107,37 @@ aceita fase fracionada (`-Phase 4.5`).
 
 ## Continuação visual já implementada
 
-O `Estúdio do Orbe` foi concluído no código-fonte em 2026-09-07, ainda sem commit,
-instalador ou atualização da instalação. Ele fica na aba homônima das configurações e
+O `Estúdio do Orbe` está commitado (`b87af6b`) e vai em todos os instaladores desde a
+0.7.3. Ele fica na aba homônima das configurações e
 também pode ser aberto isoladamente com `scripts/preview_friday.py --studio`. A prévia
 é ao vivo e usa os mesmos uniforms GPU do orbe principal; não remova essa ligação ao
 alterar o editor. O modelo está em `src/voxflow/orb_settings.py` e o editor em
 `src/voxflow/ui/orb_studio.py`. O próximo agente deve preservar seleção por estado,
 `Todos juntos`, color pickers ao vivo, salvar/resetar e os controles de erupção e voz.
 
-## Entrada de voz em 0.7.3 — dois modos convivendo
+## Entrada de voz — um modo escolhido, não dois convivendo
 
-A Friday tem duas formas de ouvir, e elas coexistem de propósito:
+Atenção se você leu uma versão anterior deste arquivo: até a 0.7.5 os dois modos
+coexistiam, e o usuário rejeitou isso. Desde a 0.7.6 `hermes.listen_mode` **escolhe**:
 
-1. **Mãos-livres** — a detecção de voz abre a gravação sozinha e o silêncio encerra o
+1. `continuous` — a detecção de voz abre a gravação sozinha e o silêncio encerra o
    turno. É o comportamento original.
-2. **Push-to-talk** — segurar o `+` do teclado numérico. Enquanto a tecla está
-   pressionada, `_hermes_tick` retorna cedo e o endpointing não encerra nada: quem
-   decide o fim do turno é a tecla.
+2. `push_to_talk` — `_hermes_tick` retorna antes de consultar o detector, **inclusive o
+   de barge-in**: nesse modo, interromper também é trabalho da tecla.
 
-Se for mexer nisso, três armadilhas já pagas:
+O atalho de fala funciona nos **dois** modos, e isso foi pedido explicitamente: no
+contínuo ele é reforço para ambiente barulhento ou pausa para pensar. Enquanto a tecla
+está pressionada o endpointing não encerra nada — quem decide o fim do turno é a tecla.
+
+Se for mexer nisso, as armadilhas já pagas:
 
 - **A tecla é da Friday durante a sessão inteira, e isso é intencional.** Foi um
   pedido explícito do usuário: ele quer alcançá-la de dentro do editor de notas, sem
   passar pelo F9. Uma primeira versão limitou a posse ao tempo em que ela estava na
   tela e foi rejeitada. `set_talk_armed` é chamado uma vez em `start()`, a partir de
   `hotkeys.hermes_push_to_talk`; esvaziar essa chave devolve a tecla ao Windows.
+- **Os atalhos são do usuário desde a 0.7.6.** Nada de constantes: `src/voxflow/keys.py`
+  modela o acorde e `hotkeys.py` é dirigido por configuração. Não volte a fixar teclas.
 - **Segurar a tecla com ela fechada tem que acordá-la e já gravar.** `toggle_hermes`
   sobe o serviço de forma assíncrona, então o clipe fica em `_pending_talk_clip` e é
   despachado quando `_on_gateway_result` confirma a subida. Sem isso, quem falasse
@@ -161,7 +173,7 @@ Fatos que custaram para ser descobertos:
 - **Nada da máquina de origem viaja no instalador.** Config em `%APPDATA%\VoxFlow`,
   segredos no Credential Manager, e os defaults com `Path.home()` são resolvidos com
   `default_factory`, ou seja, na máquina de destino.
-- **O modelo Whisper não é embarcado** (1,6 GB contra 97 MB de instalador). Ele é
+- **O modelo Whisper não é embarcado** (1,6 GB contra 100 MB de instalador). Ele é
   baixado na primeira transcrição porque `local_files_only` é falso quando o cache não
   existe. Se alguém reclamar de "primeira execução travada", é isso.
 - **`cuda_dll_dirs` e `chatterbox_path` apontam para pastas do usuário original.**
@@ -173,3 +185,77 @@ Se for acrescentar um requisito ao assistente, mexa em `check_requirements` e ma
 `general.setup_acknowledged` é o que impede a janela de reaparecer para algo que o
 usuário já recusou — grave só o que ainda falta no momento do "Continuar assim mesmo",
 nunca a lista inteira.
+
+## Sondar o disco nunca pode derrubar o app (0.7.10)
+
+**Leia isto antes de escrever qualquer código que olhe o cache do HuggingFace.**
+
+Um snapshot do cache é feito de symlinks para `blobs`. O aplicativo **instalado** nem
+sempre tem permissão para atravessá-los: o Windows responde `WinError 448`, "ponto de
+montagem não confiável". E `Path.is_file()` do pathlib **não engole esse erro** — ele
+ignora só um conjunto fixo, e o 448 não está nele.
+
+Isso derrubou a 0.7.9 na abertura, e o projeto **já sabia disso**:
+`faster_whisper_local._materialize_symlinks` existe exatamente por essa razão, e é por
+isso que há uma cópia do modelo em `%LOCALAPPDATA%\VoxFlow\models`. A lição é essa: se
+você encontrar uma função que parece redundante, descubra por que ela existe antes de
+escrever algo que a ignore.
+
+Regras que ficaram:
+
+- Toda sondagem passa por `src/voxflow/fsprobe.py` (`is_file`, `is_dir`, `modified_at`),
+  que respondem "não" em vez de levantar. Não chame os métodos crus em código que varre
+  pastas do usuário.
+- `discover()` pula a pasta que falhar e registra qual, em vez de abortar a lista.
+- As chamadas em `settings.py` e `main.py` ficam dentro de `try`: a lista de modelos é
+  conveniência e não pode ser o motivo de o app não abrir.
+- Classificar continua funcionando mesmo sem seguir links, porque decide por **nomes de
+  arquivo**. Só o `config.json` fica ilegível, e isso é reportado como tal — dizer
+  "formato não reconhecido" seria mentira sobre o disco.
+
+O ambiente de desenvolvimento **consegue** seguir os links, então esse bug não aparece
+rodando pelo código-fonte. Os testes o simulam (`tests/test_models.py`).
+
+## Modelos: o que entra e o que não entra (0.7.7 e 0.7.9)
+
+`src/voxflow/models.py` classifica por evidência em disco, nunca por nome de
+repositório — `openai/whisper-large-v3` parece servir para transcrição e o
+faster-whisper não carrega, porque é Transformers e não CTranslate2.
+
+O que decide é formato, não qualidade. Das listas de "melhores modelos PT-BR", só a
+família Whisper é alcançável: Parakeet e Nemotron são NeMo, Qwen3-ASR e Voxtral são LLMs
+de áudio. Habilitá-los exige um segundo backend de transcrição, que é entrega própria.
+
+Whisper em formato Transformers é marcado como conversível, e
+`scripts/add-stt-model.ps1` faz a conversão emprestando `transformers` e `torch` via
+`uv tool run`. **Eles não são dependências do app de propósito**: juntos passam de 2 GB
+e o instalador tem 100 MB. Não os adicione ao `pyproject.toml`.
+
+Reconhecer não é oferecer: conversíveis e de outro runtime aparecem nomeados, com o
+motivo, mas ficam fora do seletor porque nenhum carrega hoje.
+
+## Voz: o seletor precisa mesmo trocar quem fala (0.7.8)
+
+Por meses o seletor listava quatro providers e o código usava só o Edge. O usuário
+percebeu sozinho. A costura agora é `hermes/synthesizers.py`: um provider tem um
+trabalho só — escrever a frase num arquivo e reportar os tempos das palavras se souber.
+
+- Só o Edge reporta limites de palavra. Para os demais, `estimate_word_timings`
+  distribui as palavras **ancorado na duração real do clipe**, consultada no MCI depois
+  de abrir o arquivo. Não troque isso por uma estimativa de palavras por minuto: o
+  realce descolaria do áudio.
+- Listas de voz não se misturam entre providers, nos **dois** lugares onde aparecem
+  (Ajustes e a barra sob a Friday). Um nome do Edge não significa nada para o Windows.
+- Provider indisponível aparece marcado com o motivo, em vez de sumir.
+
+Chatterbox continua não integrado, e é viável: importa da pasta do usuário, torch com
+CUDA disponível, `generate(text, audio_prompt_path=..., language_id=...)`. Falta um
+processo persistente — carregar o modelo por frase inviabiliza conversa — e a "voz" dele
+é um áudio de referência, não um nome. Meça a latência antes de prometer que serve para
+conversa ao vivo.
+
+## Estado das entregas
+
+Fase 4 e 4.5 seguem **pendentes de aceite do usuário**, acumulando de 0.7.0 a 0.7.10.
+A Fase 5 (comandos de voz de estudo, screenshot para o Hermes, log Markdown por sessão,
+resumo ao fechar) está explicitamente travada esperando liberação — não comece sem ela.

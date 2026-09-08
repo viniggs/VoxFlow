@@ -968,3 +968,48 @@ os links não podem ser seguidos — recorre a `blobs`. Ambos têm teste.
 
 Validação: Ruff aprovado, 170 testes aprovados (5 novos reproduzem o WinError 448),
 varredura real conferida com os tamanhos de volta aos valores corretos.
+
+## 0.7.11 — Auditoria da documentação (2026-09-07)
+
+O usuário pediu que eu **conferisse** os documentos em vez de responder de memória.
+Fiz certo em manter `CONTINUITY.md` e o checklist a cada versão, mas errei no resto.
+
+### O que estava errado
+
+| Onde | Problema |
+|---|---|
+| `PROMPT_INICIALIZACAO_PROXIMA_IA.md` | Parou na 0.7.5. Faltavam 0.7.6 a 0.7.10 |
+| idem | Dizia que os dois modos de escuta "coexistem de propósito" — falso desde a 0.7.6, quando viraram escolha |
+| idem | Dizia que o Estúdio do Orbe estava "ainda sem commit, instalador" — falso desde a 0.7.3 |
+| idem | Anunciava "A versão atual é 0.7.0" |
+| idem | **Mandava procurar o plugin em `~/.hermes/plugins/`** — o mesmo caminho errado que eu corrigi no README na 0.7.5 e esqueci aqui |
+| `README.md` | Nenhuma menção aos providers de voz, entregues na 0.7.8 |
+| idem | Chamava o modo Hermes de "hands-free", que virou só um dos dois |
+| idem | Parágrafo do plugin ficou órfão dentro da seção "Atalhos" |
+| idem | "o instalador tem 97 MB" — são 100 MB desde a 0.7.9 |
+
+O caminho errado do plugin é o mais grave: quem seguisse o prompt instalaria num lugar
+onde o Hermes não olha, e o pensamento simplesmente não apareceria, sem erro nenhum.
+A correção agora diz explicitamente que `~/.hermes/plugins/` **não** é o caminho, para
+que uma leitura futura de um documento antigo não reintroduza o engano.
+
+### Lição de processo
+
+`CONTINUITY.md` e o checklist eu atualizava porque são o registro da entrega. O prompt
+da próxima IA e o README descrevem o **estado atual**, então cada mudança de
+comportamento os torna obsoletos em silêncio — nada falha, o texto só passa a mentir.
+Antes de fechar uma entrega, vale reler as afirmações desses dois em vez de só
+acrescentar uma seção nova.
+
+### Verificação feita
+
+- Cobertura de versões conferida arquivo a arquivo.
+- Varredura por afirmações obsoletas conhecidas (`hands-free`, `97 MB`, `coexistem`,
+  `0.7.0/Fase`, `ainda sem commit`) — nenhuma restante.
+- Varredura por bytes de controle nos quatro documentos: limpos. Um `\v` de um caminho
+  Windows tinha virado tabulação vertical numa edição por heredoc, deixando
+  `plugins\voxflow-reasoning` escrito como `pluginsoxflow-reasoning`.
+
+### Arquivos alterados
+
+`PROMPT_INICIALIZACAO_PROXIMA_IA.md`, `README.md`.
