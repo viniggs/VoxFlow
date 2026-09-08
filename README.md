@@ -51,7 +51,10 @@ O próprio campo avisa qual dos dois casos é o seu.
 Em Ajustes → Hermes → **Provider TTS**:
 
 - **Edge** — online e gratuito, sem conta. É o padrão, e o único que informa onde cada
-  palavra cai, então o realce palavra por palavra é exato.
+  palavra cai, então o realce palavra por palavra é exato. São **322 vozes em 75
+  idiomas**, buscadas na Microsoft e guardadas em cache. A lista abre nas 14 que falam
+  português (as brasileiras e todas as multilíngues); **Idioma da voz** alcança o resto,
+  e **Atualizar vozes** rebusca o catálogo.
 - **Windows (offline)** — usa as vozes que já existem no seu Windows. Não depende de
   rede e responde mais rápido que o Edge.
 - **OpenAI** — exige uma chave guardada nos segredos; enquanto não houver, aparece

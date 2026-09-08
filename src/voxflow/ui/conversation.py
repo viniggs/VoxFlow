@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from voxflow.hermes.edge_catalogue import PORTUGUESE
 from voxflow.hermes.voices import voices_for
 from voxflow.ui.cosmos import CosmicPainter
 from voxflow.ui.orb import Orb
@@ -289,7 +290,7 @@ class ConversationOverlay(QWidget):
         self._voice = QComboBox()
         self._voice.setFixedWidth(150)
         self._provider = provider
-        for option in voices_for(provider):
+        for option in voices_for(provider, group=PORTUGUESE):
             self._voice.addItem(option.short, option.identifier)
         index = self._voice.findData(voice)
         if index >= 0:
@@ -402,7 +403,7 @@ class ConversationOverlay(QWidget):
         wanted = voice or str(self._voice.currentData() or "")
         self._voice.blockSignals(True)
         self._voice.clear()
-        for option in voices_for(provider):
+        for option in voices_for(provider, group=PORTUGUESE):
             self._voice.addItem(option.short, option.identifier)
         index = self._voice.findData(wanted)
         self._voice.setCurrentIndex(index if index >= 0 else 0)

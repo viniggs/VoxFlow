@@ -468,3 +468,26 @@ Data: 2026-09-08
 - [ ] Rodar `scripts/build-release.ps1` e confirmar que o Kokoro continua funcionando no
   app instalado depois do build. O `uv sync` do começo do script removeria os pacotes se
   eles não estivessem declarados — foi o que quase aconteceu.
+
+---
+
+# VoxFlow 0.7.14 — O catálogo de vozes do Edge
+
+Data: 2026-09-08
+
+- [ ] Ajustes → Hermes: confirmar que a nota do provider Edge mostra a contagem de
+  vozes, e que existe a linha **Idioma da voz**.
+- [ ] Confirmar que ela abre em **"Português e multilíngues (14)"** e que as três
+  brasileiras (Antonio, Francisca, Thalita ML) aparecem **no topo** da lista de vozes.
+- [ ] Confirmar que **nenhuma voz de Portugal** aparece nesse grupo.
+- [ ] Trocar para **Todas** e confirmar que passam de 300 vozes.
+- [ ] Escolher um idioma qualquer (japonês, alemão) e confirmar que a lista de vozes
+  muda só para aquele idioma.
+- [ ] Escolher uma voz multilíngue de outro idioma (Ava ML, Seraphina ML) e **falar com
+  a Friday em português** — elas devem falar português mesmo sendo en-US/de-DE.
+- [ ] Clicar em **Atualizar vozes** e confirmar que a janela **não trava** durante a
+  busca e que aparece a contagem ao terminar.
+- [ ] Abrir a Friday (F9) e confirmar que a barra de controles dela mostra as 14 do
+  grupo português, e não as 322.
+- [ ] Escolher uma voz de outro idioma em Ajustes, salvar, fechar e reabrir Ajustes:
+  confirmar que a linha de idioma **abre no idioma daquela voz**, e não no padrão.

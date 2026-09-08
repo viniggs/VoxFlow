@@ -1137,3 +1137,47 @@ evento de mostrar janela exercitado ponta a ponta.
 ### O que continua na fila
 
 **Chatterbox de verdade** e a **Fase 5**, ambos pedidos e ambos entregas próprias.
+
+## 0.7.14 — As 322 vozes do Edge, e uma que eu tinha inventado (2026-09-08)
+
+O usuário perguntou por que só apareciam oito vozes do Edge. Porque **eu escrevi oito à
+mão** na 0.7.8, comentando que "o catálogo é enorme e online". Conferindo contra a lista
+real, achei coisa pior: **`pt-BR-ThalitaNeural` não existe**. Se ele tivesse escolhido
+essa voz, a síntese falharia com erro de rede e nenhuma explicação.
+
+Microsoft publica **322 vozes em 75 idiomas**, e buscá-las custa 1,1 s.
+
+### Como fica
+
+`src/voxflow/hermes/edge_catalogue.py` (novo) busca, converte e guarda em
+`%LOCALAPPDATA%\VoxFlow\edge-voices.json`. Nunca da thread do Qt: um segundo de rede ali
+é um segundo de janela congelada, então a busca vai para um executor e volta por sinal.
+Sem cache, um fallback de 14 vozes **verificadas contra a lista real** — não mais nomes
+escritos de memória.
+
+### O agrupamento, pedido pelo usuário
+
+Ele foi específico: as de Portugal não, as brasileiras e as multilíngues sim. Uma voz
+multilíngue fala português independentemente do locale dela, então
+`speaks_portuguese` aceita `pt-BR` **ou** qualquer `*Multilingual*` — são 14 no total.
+As brasileiras vêm primeiro, senão a lista abriria em alemão.
+
+As outras 308 continuam alcançáveis pela linha **Idioma da voz**, com 142 idiomas mais
+"Todas". A barra sob a Friday tem 150 px e recebe só o grupo do português: 322 num
+combo daquele tamanho seria inútil.
+
+### Uma colisão que o teste da 0.7.8 pegou
+
+`test_short_names_are_unique_within_a_provider` existia desde que duas Thalitas
+colidiram ao truncar a etiqueta. Com o catálogo inteiro ele falhou de novo: o inuktitut
+publica Siqiniq e Taqqiq em dois alfabetos, `iu-Cans-CA` e `iu-Latn-CA`. Quem colide
+agora recebe o locale no nome; os demais ficam limpos.
+
+### Arquivos alterados
+
+`src/voxflow/hermes/edge_catalogue.py` (novo), `src/voxflow/hermes/voices.py`,
+`src/voxflow/ui/settings.py`, `src/voxflow/ui/conversation.py`,
+`tests/test_edge_catalogue.py` (novo), `README.md`.
+
+Validação: Ruff aprovado, 222 testes aprovados, catálogo real buscado (322 vozes, 14 que
+falam português, 142 idiomas) e a aba Hermes renderizada com a linha de idioma.

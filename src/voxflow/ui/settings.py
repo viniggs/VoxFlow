@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 
 from voxflow.autostart import set_autostart
 from voxflow.config import AppConfig, save_config
+from voxflow.hermes import edge_catalogue
 from voxflow.hermes.voices import providers as tts_providers
 from voxflow.hermes.voices import voices_for
 from voxflow.models import (
@@ -49,6 +50,9 @@ class SettingsWindow(CosmicPanel):
     history_requested = Signal()
     hermes_action_requested = Signal(str)
     voice_changed = Signal(str)
+    #: Carries the exception, or None. Emitted from the fetching thread, so the
+    #: interface is only touched back on the Qt thread.
+    voices_refreshed = Signal(object)
 
     def __init__(self, config: AppConfig, paths: AppPaths) -> None:
         super().__init__(radius=20.0, density=0.5, brightness=0.5)
@@ -56,6 +60,7 @@ class SettingsWindow(CosmicPanel):
         self._paths = paths
         self.setWindowTitle("VoxFlow — Ajustes")
         self.resize(1040, 820)
+        self.voices_refreshed.connect(self._on_voices_refreshed)
         self._tabs = QTabWidget()
         self._build_general_tab()
         self._build_audio_tab()
@@ -312,6 +317,11 @@ class SettingsWindow(CosmicPanel):
         self._provider_note.setStyleSheet(
             f"color: {rgba(TEXT_FAINT)}; font-size: 11px; background: transparent;"
         )
+        self._voice_group = QComboBox()
+        self._voice_group.activated.connect(lambda _index: self._refill_voices())
+        self._refresh_voices = QPushButton("Atualizar vozes")
+        self._refresh_voices.setProperty("role", "ghost")
+        self._refresh_voices.clicked.connect(self._start_voice_refresh)
         self._tts_voice = QComboBox()
         self._tts_voice.setEditable(True)
         self._fill_voices(self._config.hermes.tts.provider)
@@ -343,6 +353,11 @@ class SettingsWindow(CosmicPanel):
         form.addRow("Screenshot:", self._attach_screenshot)
         form.addRow("Provider TTS:", self._tts_provider)
         form.addRow("", self._provider_note)
+        group_row = QHBoxLayout()
+        group_row.setContentsMargins(0, 0, 0, 0)
+        group_row.addWidget(self._voice_group, 1)
+        group_row.addWidget(self._refresh_voices)
+        form.addRow("Idioma da voz:", group_row)
         form.addRow("Voz:", self._tts_voice)
         form.addRow("Velocidade:", self._tts_rate)
         form.addRow("Chatterbox:", self._chatterbox_path)
@@ -483,11 +498,84 @@ class SettingsWindow(CosmicPanel):
     def _fill_voices(self, provider: str) -> None:
         """A voice list belongs to one provider; nothing is carried across."""
 
-        self._tts_voice.clear()
-        for option in voices_for(provider):
-            self._tts_voice.addItem(option.label, option.identifier)
+        self._fill_groups(provider)
+        self._refill_voices()
         entry = next((item for item in tts_providers() if item.name == provider), None)
         self._provider_note.setText(entry.detail if entry is not None else "")
+
+    def _fill_groups(self, provider: str) -> None:
+        """Only Edge has enough voices to need narrowing."""
+
+        self._voice_group.blockSignals(True)
+        self._voice_group.clear()
+        edge = provider == "edge"
+        self._voice_group.setEnabled(edge)
+        self._refresh_voices.setEnabled(edge)
+        if edge:
+            entries = edge_catalogue.load()
+            speaking = len(edge_catalogue.filter_by(entries, edge_catalogue.PORTUGUESE))
+            self._voice_group.addItem(
+                f"Português e multilíngues ({speaking})", edge_catalogue.PORTUGUESE
+            )
+            self._voice_group.addItem(f"Todas ({len(entries)})", edge_catalogue.EVERY)
+            for locale, name in edge_catalogue.locales(entries):
+                self._voice_group.addItem(f"{name}  ·  {locale}", locale)
+            wanted = self._group_for(self._config.hermes.tts.voice, entries)
+            index = self._voice_group.findData(wanted)
+            self._voice_group.setCurrentIndex(max(index, 0))
+        else:
+            self._voice_group.addItem("—", "")
+        self._voice_group.blockSignals(False)
+
+    @staticmethod
+    def _group_for(voice: str, entries: list[tuple[str, str, str]]) -> str:
+        """Open on the group that already contains the configured voice.
+
+        Otherwise choosing a German voice and reopening settings would show the
+        Portuguese list with nothing selected in it."""
+
+        for identifier, label, locale in entries:
+            if identifier == voice:
+                del label
+                if edge_catalogue.speaks_portuguese((identifier, "", locale)):
+                    return edge_catalogue.PORTUGUESE
+                return locale
+        return edge_catalogue.PORTUGUESE
+
+    def _refill_voices(self) -> None:
+        provider = str(self._tts_provider.currentData() or "edge")
+        group = str(self._voice_group.currentData() or "")
+        current = str(self._tts_voice.currentData() or self._tts_voice.currentText())
+        self._tts_voice.clear()
+        for option in voices_for(provider, group=group):
+            self._tts_voice.addItem(option.label, option.identifier)
+        index = self._tts_voice.findData(current or self._config.hermes.tts.voice)
+        if index >= 0:
+            self._tts_voice.setCurrentIndex(index)
+
+    def _start_voice_refresh(self) -> None:
+        """Ask Microsoft for the catalogue, off the interface thread.
+
+        A second of network on the Qt thread is a second of frozen window, and this is
+        the one place in settings that talks to the internet."""
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        self._refresh_voices.setEnabled(False)
+        self._refresh_voices.setText("Atualizando…")
+        pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="voxflow-voices")
+        future = pool.submit(edge_catalogue.refresh)
+        future.add_done_callback(lambda done: self.voices_refreshed.emit(done.exception()))
+        pool.shutdown(wait=False)
+
+    def _on_voices_refreshed(self, error: object) -> None:
+        self._refresh_voices.setEnabled(True)
+        self._refresh_voices.setText("Atualizar vozes")
+        if error is not None:
+            self._result.setText(f"Não consegui buscar as vozes: {type(error).__name__}")
+            return
+        self._fill_voices(str(self._tts_provider.currentData() or "edge"))
+        self._result.setText(f"{len(edge_catalogue.read_cache())} vozes do Edge carregadas.")
 
     def _on_provider_picked(self, index: int) -> None:
         del index
@@ -496,6 +584,9 @@ class SettingsWindow(CosmicPanel):
         if self._tts_voice.count():
             self._tts_voice.setCurrentIndex(0)
             self._emit_voice()
+        if provider == "edge" and edge_catalogue.is_stale():
+            # First use, or a week old. Fetched quietly so the full list is simply there.
+            self._start_voice_refresh()
 
     def _emit_voice(self) -> None:
         voice = str(self._tts_voice.currentData() or self._tts_voice.currentText()).strip()

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from loguru import logger
 
+from voxflow.hermes import edge_catalogue
 from voxflow.secrets import SecretStore
 
 EDGE = "edge"
@@ -29,6 +30,8 @@ class Voice:
     #: A name short enough for the strip of controls under Friday, and still unique:
     #: truncating the long label collided two different Thalitas into one.
     short: str = ""
+    #: Empty for providers with no notion of language, such as OpenAI and Kokoro.
+    locale: str = ""
 
     def __post_init__(self) -> None:
         if not self.short:
@@ -64,19 +67,6 @@ class Provider:
         return ""
 
 
-#: Edge's catalogue is enormous and online; these are the ones worth speaking Portuguese
-#: with, plus two for English. Any other name can still be typed by hand.
-_EDGE_VOICES = (
-    Voice("pt-BR-ThalitaMultilingualNeural", "Thalita — feminina, multilíngue", "Thalita ML"),
-    Voice("pt-BR-FranciscaNeural", "Francisca — feminina", "Francisca"),
-    Voice("pt-BR-AntonioNeural", "Antônio — masculina", "Antônio"),
-    Voice("pt-BR-ThalitaNeural", "Thalita — feminina", "Thalita"),
-    Voice("pt-PT-RaquelNeural", "Raquel — feminina, Portugal", "Raquel PT"),
-    Voice("pt-PT-DuarteNeural", "Duarte — masculina, Portugal", "Duarte PT"),
-    Voice("en-US-AvaMultilingualNeural", "Ava — feminina, multilíngue", "Ava ML"),
-    Voice("en-US-AndrewMultilingualNeural", "Andrew — masculina, multilíngue", "Andrew ML"),
-)
-
 #: OpenAI's voices are a short fixed set, identical for every account.
 _OPENAI_VOICES = (
     Voice("alloy", "Alloy"),
@@ -86,6 +76,30 @@ _OPENAI_VOICES = (
     Voice("nova", "Nova"),
     Voice("shimmer", "Shimmer"),
 )
+
+
+def _edge_short(label: str) -> str:
+    """The strip under Friday is 150 px wide; only the name fits."""
+
+    return label.split(" — ")[0]
+
+
+def _disambiguate(found: list[Voice]) -> list[Voice]:
+    """Make short names unique, since the strip shows nothing else.
+
+    Two voices can share a first name: Inuktitut publishes Siqiniq and Taqqiq in both
+    a syllabic and a Latin script. Whoever collides gets their locale appended, and
+    everybody else keeps the plain name."""
+
+    counts: dict[str, int] = {}
+    for voice in found:
+        counts[voice.short] = counts.get(voice.short, 0) + 1
+    return [
+        voice
+        if counts[voice.short] == 1
+        else Voice(voice.identifier, voice.label, f"{voice.short} {voice.locale}", voice.locale)
+        for voice in found
+    ]
 
 
 def _short_sapi(description: str) -> str:
@@ -130,12 +144,28 @@ def sapi_voices() -> list[Voice]:
         return []
 
 
-def voices_for(provider: str, *, secrets: SecretStore | None = None) -> list[Voice]:
-    """The voices a given provider can speak with. Never mixed between providers."""
+def voices_for(
+    provider: str,
+    *,
+    secrets: SecretStore | None = None,
+    group: str = "",
+) -> list[Voice]:
+    """The voices a given provider can speak with. Never mixed between providers.
+
+    ``group`` narrows Edge's 322 voices — by language, or to the ones that can speak
+    Portuguese. Everywhere else it is ignored, since those lists are short already."""
 
     del secrets
     if provider == EDGE:
-        return list(_EDGE_VOICES)
+        entries = edge_catalogue.load()
+        if group:
+            entries = edge_catalogue.filter_by(entries, group)
+        return _disambiguate(
+            [
+                Voice(identifier, label, _edge_short(label), locale)
+                for identifier, label, locale in entries
+            ]
+        )
     if provider == OPENAI:
         return list(_OPENAI_VOICES)
     if provider == SAPI:
@@ -162,7 +192,13 @@ def providers(*, secrets: SecretStore | None = None) -> list[Provider]:
     has_openai_key = bool(store.get("openai"))
 
     return [
-        Provider(EDGE, "Edge (online, gratuito)", True, "Pronto para uso.", READY),
+        Provider(
+            EDGE,
+            "Edge (online, gratuito)",
+            True,
+            _edge_detail(),
+            READY,
+        ),
         Provider(
             KOKORO,
             "Kokoro (local, PT-BR)",
@@ -231,3 +267,10 @@ def _kokoro_detail() -> str:
         "Modelo ausente: baixe onnx/model.onnx e voices.bin de "
         "onnx-community/Kokoro-82M-v1.0-ONNX."
     )
+
+
+def _edge_detail() -> str:
+    total = len(edge_catalogue.read_cache())
+    if not total:
+        return "Pronto para uso. Use “Atualizar vozes” para trazer o catálogo completo."
+    return f"{total} vozes disponíveis."
