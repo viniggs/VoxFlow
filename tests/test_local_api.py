@@ -168,3 +168,26 @@ def test_a_gateway_already_answering_settles_the_question(running_gateway: Path)
     found = requirement(AppConfig(), "hermes_api")
     assert found.ok
     assert "Respondendo" in found.detail
+
+
+# --- clicking the icon of a running app ------------------------------------------
+
+
+def test_a_second_launch_asks_the_first_to_come_forward() -> None:
+    """The bug behind "it only opens once".
+
+    The second process saw the mutex and returned silently, so nothing happened on
+    screen while the app sat in a tray Windows 11 hides by default.
+    """
+
+    from voxflow.single_instance import InstanceGuard, request_running_instance_show
+
+    guard = InstanceGuard()
+    try:
+        assert not guard.show_requested()
+        assert request_running_instance_show()
+        assert guard.show_requested()
+        # Consumed once, so the window is raised once rather than on every tick.
+        assert not guard.show_requested()
+    finally:
+        guard.close()

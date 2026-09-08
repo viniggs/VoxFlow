@@ -8,6 +8,7 @@ has exactly one job: write audio to a path, and report word timings if it knows 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import re
 from pathlib import Path
 from typing import Protocol
@@ -15,7 +16,13 @@ from typing import Protocol
 from loguru import logger
 
 from voxflow.config import TTSConfig
+from voxflow.fsprobe import is_dir, is_file, modified_at
 from voxflow.secrets import SecretStore
+
+#: The repository Kokoro's ONNX build is published under. Looked for wherever models
+#: normally land, never at a path with somebody's user name written into the source.
+KOKORO_REPO = "models--onnx-community--Kokoro-82M-v1.0-ONNX"
+
 
 #: ``(start_ms, duration_ms, text)``.
 WordTiming = tuple[float, float, str]
@@ -183,6 +190,107 @@ class OpenAISynthesizer:
         return []
 
 
+class KokoroSynthesizer:
+    """Kokoro-82M via ONNX, entirely offline. Writes 24 kHz WAV.
+
+    The engine and the espeak-ng phonemizer load once per process and are shared
+    between sentences — measured at 1.7 s for the first sentence and 400 ms for each
+    one after. Asking whether it is *available* must not pay that price, so the probe
+    only looks for the package and the model files on disk.
+    """
+
+    suffix = ".wav"
+    _ENGINE: object | None = None
+
+    def __init__(self, voice: str, rate: str, model_path: str = "") -> None:
+        self._voice = voice or "pf_dora"
+        self._speed = self._parse_speed(rate)
+        self._model_path = model_path
+
+    @staticmethod
+    def _parse_speed(rate: str) -> float:
+        cleaned = (rate or "").strip().replace("%", "")
+        try:
+            percent = float(cleaned)
+        except ValueError:
+            return 1.0
+        return max(0.5, min(2.0, 1.0 + percent / 100.0))
+
+    @staticmethod
+    def find_model(configured: str = "") -> tuple[Path, Path] | None:
+        """The newest complete Kokoro snapshot, or ``None``.
+
+        Searched where models actually land on this machine: a configured folder first,
+        then every HuggingFace cache root, then VoxFlow's own model folder."""
+
+        from voxflow.models import default_roots
+
+        candidates: list[Path] = []
+        if configured.strip():
+            candidates.append(Path(configured.strip()))
+        for root in default_roots():
+            snapshots = root / KOKORO_REPO / "snapshots"
+            if is_dir(snapshots):
+                with contextlib.suppress(OSError):
+                    candidates.extend(
+                        sorted(snapshots.iterdir(), key=modified_at, reverse=True)
+                    )
+            candidates.append(root / KOKORO_REPO)
+            candidates.append(root / "kokoro")
+        for folder in candidates:
+            model = folder / "onnx" / "model.onnx"
+            voices = folder / "voices.bin"
+            if is_file(model) and is_file(voices):
+                return model, voices
+        return None
+
+    @classmethod
+    def available(cls, configured: str = "") -> bool:
+        """Could this machine speak with Kokoro?
+
+        Deliberately cheap. The settings window asks while it is being built, so
+        loading an 82M ONNX graph to answer would stall the application's startup."""
+
+        import importlib.util
+
+        if importlib.util.find_spec("kokoro_onnx") is None:
+            return False
+        return cls.find_model(configured) is not None
+
+    def engine(self) -> object:
+        """Load the engine once per process; raise when the machine cannot run it."""
+
+        if type(self)._ENGINE is None:
+            import espeakng_loader
+            from kokoro_onnx import Kokoro
+            from kokoro_onnx.config import EspeakConfig
+
+            found = self.find_model(self._model_path)
+            if found is None:
+                repo = KOKORO_REPO.replace("models--", "").replace("--", "/")
+                raise FileNotFoundError(
+                    f"Modelo do Kokoro nao encontrado. Baixe onnx/model.onnx e "
+                    f"voices.bin de {repo}."
+                )
+            model, voices = found
+            espeak = EspeakConfig(
+                lib_path=espeakng_loader.get_library_path(),
+                data_path=espeakng_loader.get_data_path(),
+            )
+            type(self)._ENGINE = Kokoro(str(model), str(voices), espeak_config=espeak)
+            logger.info("kokoro_engine_ready model={}", model)
+        return type(self)._ENGINE
+
+    def synthesize(self, sentence: str, path: Path) -> list[WordTiming]:
+        import soundfile as sf
+
+        samples, sample_rate = self.engine().create(
+            sentence, voice=self._voice, speed=self._speed, lang="pt-br"
+        )
+        sf.write(str(path), samples, sample_rate)
+        return []
+
+
 def build(config: TTSConfig, *, secrets: SecretStore | None = None) -> Synthesizer:
     """Pick the synthesizer for the configured provider.
 
@@ -191,6 +299,8 @@ def build(config: TTSConfig, *, secrets: SecretStore | None = None) -> Synthesiz
 
     store = secrets or SecretStore()
     provider = config.provider
+    if provider == "kokoro":
+        return KokoroSynthesizer(config.voice, config.rate, config.kokoro_path)
     if provider == "sapi":
         return SapiSynthesizer(config.voice, config.rate)
     if provider == "openai":

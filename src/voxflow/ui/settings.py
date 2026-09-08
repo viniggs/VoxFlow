@@ -303,8 +303,7 @@ class SettingsWindow(CosmicPanel):
         self._attach_screenshot.setChecked(self._config.hermes.attach_screenshot_on_command)
         self._tts_provider = QComboBox()
         for entry in tts_providers():
-            mark = "" if entry.available else "  (indisponível)"
-            self._tts_provider.addItem(f"{entry.label}{mark}", entry.name)
+            self._tts_provider.addItem(f"{entry.label}{entry.suffix}", entry.name)
         provider_index = self._tts_provider.findData(self._config.hermes.tts.provider)
         self._tts_provider.setCurrentIndex(max(provider_index, 0))
         self._tts_provider.activated.connect(self._on_provider_picked)

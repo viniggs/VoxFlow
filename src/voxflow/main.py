@@ -54,7 +54,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     from voxflow.app import VoxFlowController
     from voxflow.hermes.reasoning import ReasoningStream, default_directory
-    from voxflow.single_instance import InstanceGuard
+    from voxflow.single_instance import InstanceGuard, request_running_instance_show
     from voxflow.storage import HistoryStore
     from voxflow.ui.conversation import ConversationOverlay
     from voxflow.ui.history import HistoryWindow
@@ -66,7 +66,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     guard = InstanceGuard()
     if guard.already_running:
-        logger.info("voxflow_already_running")
+        # Exiting in silence is what made the app look like it had stopped opening: it
+        # was running all along, in a tray Windows 11 hides by default.
+        raised = request_running_instance_show()
+        logger.info("voxflow_already_running raised_existing={}", raised)
         guard.close()
         return 0
     application = QApplication([])
@@ -159,11 +162,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Exception as exc:
         logger.exception("Falha ao iniciar o VoxFlow")
         window.set_error(f"Falha ao iniciar: {type(exc).__name__}: {exc}")
+    def _poll_signals() -> None:
+        if guard.quit_requested():
+            application.quit()
+            return
+        if guard.show_requested():
+            logger.info("voxflow_raised_by_second_launch")
+            window.show()
+            window.raise_()
+            window.activateWindow()
+
     quit_timer = QTimer()
     quit_timer.setInterval(250)
-    quit_timer.timeout.connect(
-        lambda: application.quit() if guard.quit_requested() else None
-    )
+    quit_timer.timeout.connect(_poll_signals)
     quit_timer.start()
     application.aboutToQuit.connect(controller.stop)
     try:

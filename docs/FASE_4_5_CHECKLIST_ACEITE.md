@@ -432,3 +432,39 @@ Data: 2026-09-08
 
 - [ ] Confirmar que o assistente **não edita** o `config.yaml` do Hermes em nenhum caso,
   só instrui. Ligar `API_SERVER_ENABLED: true` é uma ação sua, por decisão de projeto.
+
+---
+
+# VoxFlow 0.7.13 — Kokoro, janela e rótulos honestos
+
+Data: 2026-09-08
+
+## O Kokoro funcionando
+
+- [ ] Ajustes → Hermes → Provider TTS: confirmar que **Kokoro (local, PT-BR)** aparece
+  **sem** sufixo de indisponível.
+- [ ] Escolher Kokoro, voz **Dora**, salvar e falar com a Friday. Confirmar que ela
+  responde com a voz do Kokoro, offline.
+- [ ] Confirmar que a primeira frase demora um pouco mais (carga do modelo) e as
+  seguintes saem rápido.
+- [ ] Confirmar que o realce palavra por palavra continua acompanhando a fala.
+- [ ] Trocar as vozes (Dora, Alex, Santa) e confirmar que todas falam.
+
+## O app abrindo
+
+- [ ] Com o VoxFlow já rodando, clicar no ícone dele. **A janela tem que aparecer** —
+  antes não acontecia nada. Este é o item principal desta versão.
+- [ ] Repetir algumas vezes seguidas e confirmar que a janela sobe uma vez por clique,
+  sem abrir cópias.
+
+## Os rótulos
+
+- [ ] Confirmar que o Chatterbox agora diz **"(ainda não implementado)"** e não
+  "(indisponível)" — ele não existe no código, não é problema da tua máquina.
+- [ ] Confirmar que o OpenAI diz **"(falta configurar)"**, que é o caso dele: sem chave.
+
+## Se for reconstruir
+
+- [ ] Rodar `scripts/build-release.ps1` e confirmar que o Kokoro continua funcionando no
+  app instalado depois do build. O `uv sync` do começo do script removeria os pacotes se
+  eles não estivessem declarados — foi o que quase aconteceu.

@@ -1070,3 +1070,70 @@ da chave nunca é registrado em log — só a sua presença.
 Validação: Ruff aprovado, 185 testes aprovados, e o caso do amigo simulado numa máquina
 falsa — Hermes instalado com a API desligada produz exatamente o aviso com a linha a
 corrigir.
+
+## 0.7.13 — Kokoro corrigido, janela que volta, e "indisponível" com nome (2026-09-08)
+
+O usuário pediu à Friday que adicionasse o Kokoro e pediu que eu auditasse, com receio
+de estrago. **Nada commitado foi tocado**: quatro arquivos na árvore de trabalho, todos
+sobre Kokoro, e nenhum commit. O trabalho anterior está inteiro.
+
+### Os três defeitos do Kokoro
+
+1. **Caminho absoluto com o nome do usuário** (`C:\Users\vinig\.cache\...`) escrito no
+   código — a mesma classe de bug que a 0.7.5 inteira eliminou. Agora `find_model`
+   procura via `models.default_roots()`, com `tts.kokoro_path` para apontar uma cópia
+   fora do caminho. Há teste que falha se um caminho de home voltar ao fonte.
+2. **Dependências instaladas à mão**, ausentes do `pyproject.toml`. O
+   `build-release.ps1` começa com `uv sync`, que **remove** o que não está declarado —
+   o build seguinte perderia o Kokoro em silêncio. Agora existe o extra `kokoro` e o
+   script o instala.
+3. **`available()` carregava o modelo ONNX inteiro**, e é chamado ao montar a janela de
+   Ajustes, ou seja, na abertura, na thread do Qt. Agora só procura pacote e arquivos:
+   **0,9 ms**, medido. Há teste que explode se a sonda carregar o motor.
+
+### E o que realmente quebrava
+
+O log deu a causa: `kokoro_onnx\config.json` faltando no pacote. O `voxflow.spec`
+coletava os dados do `espeakng_loader` mas não os do próprio `kokoro_onnx`, que lê o
+seu `config.json` em tempo de execução. Funcionava pelo código-fonte e falhava só
+empacotado — foi assim que chegou ao usuário.
+
+Medido depois do conserto: **1,7 s** na primeira frase (com carga do modelo) e
+**402 ms** nas seguintes, offline.
+
+### "Só abre na primeira vez"
+
+Não era build, como se supôs. É [main.py](src/voxflow/main.py): a segunda execução via
+o mutex e fazia `return 0` **calado**. O app estava rodando o tempo todo, numa bandeja
+que o Windows 11 esconde por padrão. Agora existe um evento nomeado `SHOW`, irmão do
+`QUIT` que já existia: a segunda execução o dispara e a primeira levanta a janela. O
+evento é consumido uma vez, para a janela subir uma vez e não a cada tique.
+
+### "Indisponível" dizia duas coisas diferentes
+
+O usuário leu "indisponível" no Chatterbox e concluiu que faltava algo na máquina dele —
+quando na verdade **não existe código**. Agora `Provider` tem `status`: `ready`,
+`needs_setup` (falta configurar) e `not_implemented` (ainda não existe). O dropdown
+mostra o sufixo certo.
+
+### Uma hipótese minha que a medição derrubou
+
+Vi entradas de log com carimbo ~3 h à frente e supus que o build congelado usava UTC.
+Medi: o exe instalado marcou `03:11:44` contra `03:11:43` do Windows — **o fuso está
+certo**. É um único salto para trás em 2.226 linhas, de origem desconhecida, e não
+inventei correção para isso.
+
+### Arquivos alterados
+
+`packaging/voxflow.spec`, `pyproject.toml`, `scripts/build-release.ps1`,
+`src/voxflow/config.py`, `src/voxflow/hermes/synthesizers.py`,
+`src/voxflow/hermes/voices.py`, `src/voxflow/single_instance.py`,
+`src/voxflow/main.py`, `src/voxflow/ui/settings.py`, `tests/test_kokoro.py` (novo),
+`tests/test_voice_providers.py`, `tests/test_local_api.py`.
+
+Validação: Ruff aprovado, 207 testes aprovados, Kokoro sintetizando de verdade e o
+evento de mostrar janela exercitado ponta a ponta.
+
+### O que continua na fila
+
+**Chatterbox de verdade** e a **Fase 5**, ambos pedidos e ambos entregas próprias.

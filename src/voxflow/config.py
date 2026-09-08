@@ -97,10 +97,13 @@ class InjectConfig(StrictModel):
 
 
 class TTSConfig(StrictModel):
-    provider: Literal["edge", "openai", "sapi", "chatterbox"] = "edge"
+    provider: Literal["edge", "openai", "sapi", "chatterbox", "kokoro"] = "edge"
     voice: str = "pt-BR-ThalitaMultilingualNeural"
     rate: str = "+5%"
     chatterbox_path: str = r"C:\AI\Chatterbox-Friday"
+    #: Vazio significa procurar o modelo no cache do HuggingFace e na pasta de
+    #: modelos do VoxFlow. Preencha só para apontar uma cópia fora do caminho.
+    kokoro_path: str = ""
 
 
 class HermesConfig(StrictModel):

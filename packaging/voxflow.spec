@@ -1,6 +1,9 @@
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import (
+    collect_data_files,
+    collect_submodules,
+)
 
 project_root = Path(SPECPATH).parent
 
@@ -10,8 +13,22 @@ analysis = Analysis(
     binaries=[],
     # The reasoning plugin travels with the app: the setup assistant installs it
     # into the Hermes plugin folder, so nobody has to be told where it lives.
-    datas=[(str(project_root / "packaging" / "hermes-plugin"), "hermes-plugin")],
-    hiddenimports=["keyring.backends.Windows", *collect_submodules("edge_tts")],
+    datas=[
+        (str(project_root / "packaging" / "hermes-plugin"), "hermes-plugin"),
+        # espeak-ng bundle (DLL + data de vozes): phonemizador do Kokoro em PT-BR.
+        *collect_data_files("espeakng_loader"),
+        # kokoro_onnx lê o próprio config.json em tempo de execução; sem ele o
+        # provider carrega no código-fonte e falha só no aplicativo empacotado.
+        *collect_data_files("kokoro_onnx"),
+    ],
+    hiddenimports=[
+        "keyring.backends.Windows",
+        *collect_submodules("edge_tts"),
+        "kokoro_onnx",
+        "kokoro_onnx.config",
+        "espeakng_loader",
+        "soundfile",
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -168,3 +168,23 @@ def test_a_synthesizer_writes_where_it_is_told(tmp_path: Path) -> None:
     target = tmp_path / "out.wav"
     assert not target.exists()
     assert SapiSynthesizer("", "+0%").suffix == ".wav"
+
+
+# --- "unavailable" is not one thing ------------------------------------------------
+
+
+def test_a_missing_key_and_missing_code_read_differently() -> None:
+    # Reading "indisponível" for both is what made a provider that was never written
+    # look like one that simply was not found on the machine.
+    from voxflow.hermes.voices import NEEDS_SETUP, NOT_IMPLEMENTED
+
+    found = {item.name: item for item in voices.providers(secrets=FakeSecrets())}
+    assert found["openai"].status == NEEDS_SETUP
+    assert found["chatterbox"].status == NOT_IMPLEMENTED
+    assert found["openai"].suffix != found["chatterbox"].suffix
+
+
+def test_a_ready_provider_carries_no_suffix() -> None:
+    edge = next(item for item in voices.providers(secrets=FakeSecrets()) if item.name == "edge")
+    assert edge.available
+    assert edge.suffix == ""

@@ -38,7 +38,7 @@ function Invoke-Checked {
     }
 }
 
-Invoke-Checked { uv sync --extra desktop --extra providers --extra local-stt --extra dev --extra build } 'Falha ao preparar o ambiente.'
+Invoke-Checked { uv sync --extra desktop --extra providers --extra local-stt --extra kokoro --extra dev --extra build } 'Falha ao preparar o ambiente.'
 if (-not $SkipValidation) {
     Invoke-Checked { uv run ruff check . } 'Ruff encontrou problemas.'
     Invoke-Checked { uv run pytest } 'Os testes falharam.'

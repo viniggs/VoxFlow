@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "voxflow"
-version = "0.7.12"
+version = "0.7.13"
 description = "Ditado universal e companheiro de estudos por voz para Windows"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -37,6 +37,14 @@ providers = [
 ]
 local-stt = [
   "faster-whisper",
+]
+# Voz local do Kokoro. Fora de `providers` porque é opcional e pesada; declarada
+# aqui porque `uv sync` remove qualquer pacote que não esteja no projeto, e uma
+# instalação feita à mão desaparece silenciosamente no build seguinte.
+kokoro = [
+  "kokoro-onnx",
+  "espeakng-loader",
+  "soundfile",
 ]
 vad = [
   "onnxruntime",
