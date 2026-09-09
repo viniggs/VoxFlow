@@ -458,3 +458,46 @@ def test_the_worker_does_not_inherit_our_python() -> None:
     ours = str(Path(sys.executable).parent).casefold()
     entries = [item.casefold() for item in environment["PATH"].split(os.pathsep)]
     assert ours not in entries
+
+
+def test_the_worker_is_stopped_with_the_application() -> None:
+    """It is a child process holding a model in video memory, not a thread. Closing
+    VoxFlow does not close it, and it would keep the GPU busy until a reboot."""
+
+    from voxflow.hermes import chatterbox
+
+    class FakeWorker:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    worker = FakeWorker()
+    chatterbox.ChatterboxSpeaker._instance = worker  # type: ignore[assignment]
+    try:
+        chatterbox.shutdown()
+    finally:
+        chatterbox.ChatterboxSpeaker._instance = None
+
+    assert worker.closed is True
+
+    chatterbox.shutdown()  # nothing running is not an error
+
+
+def test_the_shutdown_is_registered_for_any_exit() -> None:
+    """Not every path builds a controller.
+
+    `--check-voices` starts a worker and exits without one, and leaked a process holding
+    the GPU on every run until this was hooked to `atexit` as well.
+    """
+
+    import atexit
+    import inspect
+
+    from voxflow.hermes import chatterbox
+
+    source = inspect.getsource(chatterbox)
+    assert "@atexit.register" in source
+    assert "def shutdown" in source
+    del atexit

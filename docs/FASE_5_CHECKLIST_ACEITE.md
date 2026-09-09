@@ -168,3 +168,21 @@ Data: 2026-09-09
   atalhos devem ser **os teus** (`ctrl+num_add`, `f8`, `ctrl+num_multiply`), não os
   padrões.
 - [ ] Conferir que a mensagem "Pronto — segure ... para ditar" nomeia o teu atalho.
+
+---
+
+# VoxFlow 0.8.7 — O Chatterbox sai junto
+
+Data: 2026-09-09
+
+- [ ] Usar o Chatterbox, fechar o VoxFlow e conferir no Gerenciador de Tarefas que
+  **não sobra** um `python.exe` do Chatterbox segurando a placa de vídeo.
+
+---
+
+# VoxFlow 0.8.8 — Nenhum processo sobra
+
+Data: 2026-09-09
+
+- [ ] Rodar `VoxFlow.exe --check-voices`, esperar terminar e conferir no Gerenciador de
+  Tarefas que **nenhum** `python.exe` do Chatterbox ficou rodando.

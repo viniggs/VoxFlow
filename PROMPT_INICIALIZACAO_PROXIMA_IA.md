@@ -36,7 +36,7 @@ aqui significa apenas o preview na UI: nunca injete parciais no Notepad, Chrome 
 aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa visibilidade em
 todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco horas é crítico.
 
-A versão atual é **0.8.6**/Fase 5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
+A versão atual é **0.8.8**/Fase 5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
 SSE, painel de resposta, TTS por sentença, barge-in, half-duplex e controles de
 health/start/stop. Desde então mudaram coisas que as seções no fim deste arquivo
 detalham — leia-as antes de confiar em qualquer parágrafo anterior a elas.

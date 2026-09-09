@@ -291,6 +291,10 @@ class VoxFlowController(QObject):
         self._hermes_executor.shutdown(wait=False, cancel_futures=True)
         self._hermes_control.shutdown(wait=False, cancel_futures=True)
         self._cleaner.close()
+        # A child process, not a thread: it survives us and keeps the GPU busy.
+        from voxflow.hermes.chatterbox import shutdown as stop_chatterbox
+
+        stop_chatterbox()
         logger.info("voxflow_stopped")
 
     @Slot(object)

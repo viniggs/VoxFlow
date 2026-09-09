@@ -13,6 +13,7 @@ it stayed unimplemented until now.
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import shutil
@@ -196,6 +197,27 @@ class ChatterboxSpeaker:
         finally:
             if self._process.poll() is None:
                 self._process.kill()
+
+
+@atexit.register
+def shutdown() -> None:
+    """Stop the worker, if one is running.
+
+    It holds a model in video memory and is a child process, not a thread: closing
+    VoxFlow does not close it. Left behind, it keeps the GPU busy until the machine is
+    restarted or the process is killed by hand.
+
+    Registered with `atexit` as well as called from the controller's shutdown, because
+    not every path builds a controller — `--check-voices` starts a worker and exits, and
+    that leaked one every run until this was hooked here.
+    """
+
+    with ChatterboxSpeaker._guard:
+        current = ChatterboxSpeaker._instance
+        ChatterboxSpeaker._instance = None
+    if current is not None:
+        current.close()
+        logger.info("chatterbox_worker_stopped")
 
 
 def child_environment() -> dict[str, str]:

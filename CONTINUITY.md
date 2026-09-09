@@ -1,9 +1,9 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-08
-Versão: 0.8.6
+Versão: 0.8.8
 Fase concluída no código: Fase 5, aguardando aceite manual
-Instalador mais recente gerado: 0.8.6 (`releases/fase-5/0.8.6/`)
+Instalador mais recente gerado: 0.8.8 (`releases/fase-5/0.8.8/`)
 O usuário pediu para juntar tudo num teste só: a 0.8.0 carrega a Fase 5 e também
 os itens ainda não aceitos de 0.7.13 a 0.7.16.
 
@@ -1839,3 +1839,30 @@ widgets mostraram os valores certos e o `save()` os preservou.
 Não consegui reproduzir a causa, então não inventei conserto e **não mexi nos atalhos
 dele**. O backup `config.yaml.bak.pre-screenshot-20260909_022255`, de antes de qualquer
 edição minha, já trazia os padrões.
+
+
+## 0.8.7 — O Chatterbox não pode sobreviver ao app (2026-09-09)
+
+O worker é um **processo filho**, não uma thread: fechar o VoxFlow não o fecha. Ele fica
+com o modelo carregado na memória de vídeo até a máquina reiniciar ou alguém matá-lo à
+mão. `shutdown()` encerra o worker e `VoxFlowController.stop()` o chama. Há teste, e ele
+também cobre encerrar quando não há nada rodando.
+
+### Arquivos alterados
+
+`src/voxflow/hermes/chatterbox.py`, `src/voxflow/app.py`, `tests/test_voice_providers.py`.
+
+
+## 0.8.8 — O encerramento tinha que valer para todo caminho (2026-09-09)
+
+A 0.8.7 fechava o worker em `VoxFlowController.stop()`, e eu conferi rodando
+`--check-voices` no app instalado: **sobraram dois processos**. Aquele caminho não
+constrói controlador nenhum — ele sintetiza e sai —, então vazava um processo com o
+modelo na placa de vídeo a cada execução.
+
+`shutdown()` agora também está registrado em `atexit`, que vale para qualquer saída.
+Os dois órfãos foram encerrados.
+
+### Arquivos alterados
+
+`src/voxflow/hermes/chatterbox.py`, `tests/test_voice_providers.py`.

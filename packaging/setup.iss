@@ -1,5 +1,5 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "0.8.6"
+  #define MyAppVersion "0.8.8"
 #endif
 #ifndef BuildRoot
   #define BuildRoot "..\\dist\\VoxFlow"
