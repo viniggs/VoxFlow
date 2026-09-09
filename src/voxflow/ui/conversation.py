@@ -263,6 +263,8 @@ class ConversationOverlay(QWidget):
         self._agent_bubble: Bubble | None = None
         self._thought_bubble: Bubble | None = None
         self._thought_turn = ""
+        #: Reasoning is shown while the turn is in flight, and not after it ends.
+        self._listening_to_thoughts = False
 
         self._stream = QWidget()
         self._stream_layout = QVBoxLayout(self._stream)
@@ -377,6 +379,10 @@ class ConversationOverlay(QWidget):
             self._orb.set_amplitude(0.0)
         if state != "speaking" and self._agent_bubble is not None:
             self._agent_bubble.clear_highlight()
+        if state in {"off", "listening"}:
+            # The turn is over. Anything the reasoning file says from here belongs to
+            # work she is finishing on her own, and stops being shown.
+            self._listening_to_thoughts = False
 
     def set_amplitude(self, amplitude: float) -> None:
         self._orb.set_amplitude(amplitude)
@@ -396,19 +402,32 @@ class ConversationOverlay(QWidget):
         self._agent_bubble = None
         self._thought_bubble = None
         self._thought_turn = ""
+        self._listening_to_thoughts = True
 
     def begin_thinking(self, turn_id: str) -> None:
         """A new block of reasoning started."""
 
+        if not self._listening_to_thoughts:
+            return
         if turn_id == self._thought_turn and self._thought_bubble is not None:
             return
         self._thought_turn = turn_id
         self._thought_bubble = None
 
     def append_thinking(self, turn_id: str, text: str) -> None:
-        """Stream reasoning into the current block."""
+        """Stream reasoning into the current block, while the turn is still hers.
+
+        Hermes keeps thinking after the answer is finished — a second iteration doing
+        tool work — and the plugin keeps writing it. Measured on a real turn: she stopped
+        speaking at 10:39:46 and reasoning was still arriving at 10:40:09, twenty-three
+        seconds of text pouring into the panel while the app already said "pronto para a
+        próxima pergunta". Whatever she finishes on her own is not something to watch
+        scroll.
+        """
 
         del turn_id
+        if not self._listening_to_thoughts:
+            return
         if self._thought_bubble is None:
             self._thought_bubble = self._make_bubble("thought")
         self._thought_bubble.append(text)

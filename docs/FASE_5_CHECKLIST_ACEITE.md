@@ -186,3 +186,14 @@ Data: 2026-09-09
 
 - [ ] Rodar `VoxFlow.exe --check-voices`, esperar terminar e conferir no Gerenciador de
   Tarefas que **nenhum** `python.exe` do Chatterbox ficou rodando.
+
+---
+
+# VoxFlow 0.8.9 — O pensamento para quando o turno acaba
+
+Data: 2026-09-09
+
+- [ ] Fazer uma pergunta que dê trabalho a ela (algo com arquivo ou busca) e, **assim que
+  ela terminar de falar**, confirmar que o pensamento **para** de rolar.
+- [ ] Confirmar que durante o turno o pensamento continua aparecendo normalmente,
+  inclusive enquanto ela fala.

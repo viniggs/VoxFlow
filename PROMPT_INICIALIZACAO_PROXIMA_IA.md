@@ -36,7 +36,7 @@ aqui significa apenas o preview na UI: nunca injete parciais no Notepad, Chrome 
 aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa visibilidade em
 todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco horas é crítico.
 
-A versão atual é **0.8.8**/Fase 5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
+A versão atual é **0.8.9**/Fase 5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
 SSE, painel de resposta, TTS por sentença, barge-in, half-duplex e controles de
 health/start/stop. Desde então mudaram coisas que as seções no fim deste arquivo
 detalham — leia-as antes de confiar em qualquer parágrafo anterior a elas.
@@ -450,3 +450,11 @@ O worker do Chatterbox (3.11) subia encontrando o `python312.dll` do VoxFlow emp
 morria com "Module use of python312.dll conflicts with this version of Python". Qualquer
 processo externo iniciado pelo app precisa de `child_environment()`: sem `PYTHONHOME`,
 `PYTHONPATH`, e sem a pasta do interpretador no `PATH`.
+
+
+## O raciocínio não acaba com a resposta (0.8.9)
+
+O plugin escreve o raciocínio de **todas** as iterações, e a Friday continua trabalhando
+depois de responder: medido, 23 s de deltas chegando depois de a fala terminar. O painel
+só mostra raciocínio enquanto o turno está em voo (`begin_turn` até `listening`/`off`).
+Se for mexer nisso, lembre que pensamento e fala se sobrepõem de propósito.

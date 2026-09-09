@@ -122,7 +122,7 @@ class DictationCleaner:
     ) -> str:
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "User-Agent": "VoxFlow/0.8.8 Windows dictation",
+            "User-Agent": "VoxFlow/0.8.9 Windows dictation",
             "x-opencode-session": self._session_id,
         }
         prompt = self._system_prompt(app, rule)

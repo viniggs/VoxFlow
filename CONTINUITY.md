@@ -1,9 +1,9 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-08
-Versão: 0.8.8
+Versão: 0.8.9
 Fase concluída no código: Fase 5, aguardando aceite manual
-Instalador mais recente gerado: 0.8.8 (`releases/fase-5/0.8.8/`)
+Instalador mais recente gerado: 0.8.9 (`releases/fase-5/0.8.9/`)
 O usuário pediu para juntar tudo num teste só: a 0.8.0 carrega a Fase 5 e também
 os itens ainda não aceitos de 0.7.13 a 0.7.16.
 
@@ -1866,3 +1866,39 @@ Os dois órfãos foram encerrados.
 ### Arquivos alterados
 
 `src/voxflow/hermes/chatterbox.py`, `tests/test_voice_providers.py`.
+
+
+## 0.8.9 — O pensamento continuava rolando depois do turno (2026-09-09)
+
+O usuário relatou que ela para de falar e o raciocínio fica rolando na tela por um tempão,
+e lembrou que isso já tinha sido tratado. A 0.7.1 tratou **outra coisa**: o raciocínio
+chegava em rajada porque cada delta redesenhava o balão inteiro. Isto aqui é diferente.
+
+### A medição
+
+Cruzando o arquivo de raciocínio com o log do app, no turno das 10:39 de hoje:
+
+| Momento | O que aconteceu |
+|---|---|
+| 10:39:22 | primeiro delta de raciocínio |
+| 10:39:46 | última frase falada; app anuncia "pronto para a próxima pergunta" |
+| **10:40:09** | **raciocínio ainda chegando** |
+
+São **23 segundos** de texto entrando no painel depois de a conversa ter acabado. O turno
+inteiro somou 1.051 deltas em 46,7 s, em **duas iterações**: ela responde na primeira e
+continua trabalhando com ferramentas na segunda. O plugin escreve tudo, e o painel
+mostrava tudo.
+
+### A correção
+
+O raciocínio é mostrado enquanto o turno é dela — de `begin_turn` até o app voltar a
+`listening` ou desligar. O que ela faz depois continua existindo no arquivo, e continua
+sendo trabalho legítimo dela; só deixa de rolar na tela como se ela estivesse travada.
+
+`tests/test_reasoning_display.py` cobre os dois lados: pensamento durante o turno aparece,
+inclusive enquanto ela fala; o que chega depois não abre balão nem entra no existente.
+Removida a correção, três dos seis reprovam.
+
+### Arquivos alterados
+
+`src/voxflow/ui/conversation.py`, `tests/test_reasoning_display.py` (novo).
