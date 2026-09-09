@@ -1667,3 +1667,25 @@ com venv próprio e mais de 2 GB de torch — nada disso entra num instalador de
 não dá para importar de dentro do processo do VoxFlow. Exige um **processo separado**
 falando com o app, mais um seletor de áudio de referência (a "voz" dele é um arquivo, não
 um nome). É entrega própria, e continua pendente de decisão do usuário.
+
+### Escolher o provider não fazia nada até clicar em Salvar
+
+O usuário disse que não conseguia sequer usar a voz do Windows. Reproduzi o clique numa
+`SettingsWindow` real, com a fiação do `main.py` ligada, e o salvamento grava `sapi`
+corretamente — não há defeito ali.
+
+O que o log dele mostra é outra coisa, e é definitiva: **`SapiSynthesizer` não aparece
+uma única vez** em mais de 2.500 linhas. O provider nunca chegou a ser construído. Ou
+seja, a escolha nunca virou configuração salva.
+
+A causa é uma inconsistência da própria interface: o seletor de voz **sob o orbe** salva
+na hora (`voice_changed` → `set_hermes_voice` → `save`), enquanto o seletor de provider
+**em Ajustes** só valia depois de clicar em Salvar. Escolher "Windows (offline)" e não
+ver nada acontecer é exatamente o sintoma.
+
+Agora `_on_provider_picked` salva na hora, e `apply_config` recria o sintetizador em
+seguida. Há teste: escolher `sapi` **sem** clicar em Salvar deixa `provider: sapi` no
+disco, e ele reprova se a gravação for removida.
+
+O acesso à tela para ver isso acontecendo ao vivo foi negado pelo usuário, então a
+conclusão vem do log e da reprodução, não de observação direta.

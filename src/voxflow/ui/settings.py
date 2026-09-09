@@ -607,6 +607,10 @@ class SettingsWindow(CosmicPanel):
         if provider == "edge" and edge_catalogue.is_stale():
             # First use, or a week old. Fetched quietly so the full list is simply there.
             self._start_voice_refresh()
+        # Applied on the spot, like the voice picker under the orb already does. Picking
+        # a provider and having nothing happen until a separate Save is what made the
+        # Windows voice look broken: the log shows it was never once built.
+        self.save(show_dialog=False)
 
     def _emit_voice(self) -> None:
         voice = str(self._tts_voice.currentData() or self._tts_voice.currentText()).strip()

@@ -282,3 +282,31 @@ def test_edge_asks_for_word_boundaries() -> None:
 
     assert captured.get("boundary") == "WordBoundary"
     assert words == [(50.0, 425.0, "oi")]
+
+
+def test_picking_a_provider_applies_it_without_a_separate_save(
+    qt_app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Choosing "Windows (offline)" and having nothing happen is what made it look
+    broken. The voice picker under the orb has always saved on the spot; this one did
+    not, and the log showed the SAPI voice was never built even once."""
+
+    del qt_app
+    monkeypatch.setenv("VOXFLOW_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("VOXFLOW_DATA_DIR", str(tmp_path / "data"))
+
+    from voxflow.config import load_config
+    from voxflow.paths import get_app_paths
+    from voxflow.ui.settings import SettingsWindow
+
+    paths = get_app_paths()
+    paths.ensure_directories()
+    window = SettingsWindow(load_config(paths), paths)
+
+    index = window._tts_provider.findData("sapi")
+    if index < 0:  # pragma: no cover - a machine with no Windows voices
+        pytest.skip("esta máquina não oferece o provider do Windows")
+    window._tts_provider.setCurrentIndex(index)
+    window._on_provider_picked(index)
+
+    assert load_config(paths).hermes.tts.provider == "sapi"

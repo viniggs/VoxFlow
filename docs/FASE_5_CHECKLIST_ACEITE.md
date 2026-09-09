@@ -109,3 +109,6 @@ Data: 2026-09-09
 - [ ] Com o **Edge**, confirmar que o realce agora acompanha palavra por palavra com
   precisão (ele voltou a informar os tempos reais, que estavam desligados).
 - [ ] Testar os três que funcionam — Edge, Kokoro e Windows — e confirmar que todos falam.
+- [ ] Em Ajustes → Hermes, escolher **Windows (offline)** e **não** clicar em Salvar:
+  a troca deve valer sozinha. Confirmar no log um `tts_speaker_ready
+  synthesizer=SapiSynthesizer` e ouvir a Friday falar com a voz do Windows.
