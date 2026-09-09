@@ -1689,3 +1689,22 @@ disco, e ele reprova se a gravação for removida.
 
 O acesso à tela para ver isso acontecendo ao vivo foi negado pelo usuário, então a
 conclusão vem do log e da reprodução, não de observação direta.
+
+### A rede de segurança não era o conserto
+
+O usuário cobrou a redação de "volta a ouvir quando a voz não pode terminar o turno", e
+com razão técnica: aquilo tratava o sintoma. Pior, no caso da troca de voz ele **perdia o
+resto da resposta** — a fala era cortada no meio e o app dizia "pode falar".
+
+A causa real é o app destruir a voz enquanto ela está falando. `_apply_voice_change()`
+não faz mais isso: estando em `SPEAKING`, a troca fica pendente em `_pending_speaker` e
+acontece em `_on_tts_idle`, quando ela termina. A frase em curso é preservada, e a voz
+nova vale a partir da próxima — que é a única hora em que uma troca de voz é audível.
+O painel avisa: "Voz trocada — vale assim que ela terminar de falar".
+
+`_recover_from_lost_voice` continua existindo, mas agora é o que sempre deveria ter sido:
+uma rede para o caso de um sintetizador falhar de verdade, não a explicação de um defeito.
+
+Dois testes exercitam o método real: escolher voz durante a fala **não** troca o
+sintetizador e deixa a troca pendente; escolher com ela calada troca na hora. Removida a
+espera, o primeiro reprova.

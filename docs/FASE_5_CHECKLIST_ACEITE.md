@@ -112,3 +112,6 @@ Data: 2026-09-09
 - [ ] Em Ajustes → Hermes, escolher **Windows (offline)** e **não** clicar em Salvar:
   a troca deve valer sozinha. Confirmar no log um `tts_speaker_ready
   synthesizer=SapiSynthesizer` e ouvir a Friday falar com a voz do Windows.
+- [ ] **Trocar a voz enquanto ela fala**: a frase em curso deve terminar inteira, o
+  painel avisa que a troca vale ao terminar, e a voz nova aparece na resposta seguinte.
+  Nada de fala cortada nem de painel preso.

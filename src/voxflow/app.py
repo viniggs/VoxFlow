@@ -161,6 +161,8 @@ class VoxFlowController(QObject):
         #: True between "encerra sessão" and the end of the closing words, so the mode
         #: shuts down after she finishes speaking rather than in the middle of it.
         self._closing_session = False
+        #: A voice chosen while she is mid-sentence waits here until she stops.
+        self._pending_speaker = False
         self._hermes_client = self._create_hermes_client(config)
         self._sentence_buffer = SentenceBuffer()
         self._speaker = self._create_speaker(config)
@@ -290,12 +292,7 @@ class VoxFlowController(QObject):
                 restore_clipboard=config.inject.restore_clipboard
             )
         if old_config.hermes != config.hermes:
-            was_speaking = self._hermes_state is HermesState.SPEAKING
-            self._speaker.close()
-            self._speaker = self._create_speaker(config)
-            if was_speaking:
-                logger.info("hermes_speaker_replaced_while_speaking")
-                self._recover_from_lost_voice("voz trocada; pode falar")
+            self._apply_voice_change()
         self._hermes_client = self._create_hermes_client(config)
         if old_config.audio != config.audio:
             self._vad = self._create_vad(config)
@@ -1011,6 +1008,9 @@ class VoxFlowController(QObject):
 
     @Slot()
     def _on_tts_idle(self) -> None:
+        if self._pending_speaker:
+            # She has finished; the voice chosen mid-sentence can take over now.
+            self._replace_speaker()
         if self._closing_session and self._hermes_state is not HermesState.OFF:
             # She has finished the summary; now the mode can go, and not before.
             logger.info("study_session_closed")
@@ -1023,6 +1023,31 @@ class VoxFlowController(QObject):
     def _on_tts_error(self, message: str) -> None:
         self._signals.hermes_gateway_status.emit(message)
         self._recover_from_lost_voice(message)
+
+    def _apply_voice_change(self) -> None:
+        """Swap the voice now, or when she stops talking.
+
+        Closing the speaker mid-sentence cuts her off and throws away the rest of the
+        answer — and takes with it the "finished" signal this state machine waits for,
+        which is how the panel came to sit on "falando" indefinitely. A voice change is
+        only audible on the next thing she says anyway.
+        """
+
+        if self._hermes_state is HermesState.SPEAKING:
+            self._pending_speaker = True
+            logger.info("hermes_speaker_swap_deferred")
+            self._signals.status_changed.emit(
+                "Voz trocada — vale assim que ela terminar de falar"
+            )
+            return
+        self._replace_speaker()
+
+    def _replace_speaker(self) -> None:
+        """Swap the speaker for one built from the current settings."""
+
+        self._pending_speaker = False
+        self._speaker.close()
+        self._speaker = self._create_speaker(self._config)
 
     def _recover_from_lost_voice(self, message: str) -> None:
         """Hand the turn back when the voice can no longer finish it.

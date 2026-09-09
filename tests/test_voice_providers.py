@@ -310,3 +310,71 @@ def test_picking_a_provider_applies_it_without_a_separate_save(
     window._on_provider_picked(index)
 
     assert load_config(paths).hermes.tts.provider == "sapi"
+
+
+# --- changing the voice must not cut her off ----------------------------------------
+
+
+def test_a_voice_chosen_mid_sentence_waits_for_her_to_finish() -> None:
+    """Closing the speaker while she talks throws away the rest of the answer.
+
+    It also takes with it the "finished" signal the state machine waits for, which is
+    how the panel came to sit on "falando" for ten minutes. Returning to listening was
+    a net, not a fix: the fix is not to break the speaker in the first place.
+    """
+
+    from types import SimpleNamespace
+
+    from voxflow.app import HermesState, VoxFlowController
+
+    replaced: list[str] = []
+    said: list[str] = []
+    fake = SimpleNamespace(
+        _hermes_state=HermesState.SPEAKING,
+        _pending_speaker=False,
+        _replace_speaker=lambda: replaced.append("agora"),
+        _signals=SimpleNamespace(status_changed=SimpleNamespace(emit=said.append)),
+    )
+
+    VoxFlowController._apply_voice_change(fake)
+
+    assert replaced == [], "a fala em curso não pode ser cortada"
+    assert fake._pending_speaker is True
+    assert said and "terminar de falar" in said[0]
+
+
+def test_a_voice_chosen_while_she_is_quiet_takes_effect_at_once() -> None:
+    from types import SimpleNamespace
+
+    from voxflow.app import HermesState, VoxFlowController
+
+    replaced: list[str] = []
+    fake = SimpleNamespace(
+        _hermes_state=HermesState.LISTENING,
+        _pending_speaker=False,
+        _replace_speaker=lambda: replaced.append("agora"),
+        _signals=SimpleNamespace(status_changed=SimpleNamespace(emit=lambda _m: None)),
+    )
+
+    VoxFlowController._apply_voice_change(fake)
+
+    assert replaced == ["agora"]
+
+
+def test_the_deferred_voice_takes_over_when_she_stops() -> None:
+    from types import SimpleNamespace
+
+    from voxflow.app import HermesState, VoxFlowController
+
+    replaced: list[str] = []
+    fake = SimpleNamespace(
+        _pending_speaker=True,
+        _replace_speaker=lambda: replaced.append("trocou"),
+        _closing_session=False,
+        _hermes_state=HermesState.SPEAKING,
+        _talk_active=False,
+        _enter_hermes_listening=lambda _m="ouvindo": None,
+    )
+    VoxFlowController._on_tts_idle(fake)
+
+    assert replaced == ["trocou"]
