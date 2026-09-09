@@ -35,13 +35,10 @@ o app é que responde.
 
 Em Ajustes → Hermes → **Quem olha a tela**:
 
-- [ ] Com **"Ela olha"** (padrão): depois de pedir, abrir o **app desktop do Hermes** e
-  confirmar que a conversa aparece lá — o pedido, a captura e a resposta. É lento,
-  cerca de **170 s**, porque ela procura a ferramenta antes de usar.
-- [ ] Ainda com "Ela olha": na conversa seguinte, perguntar *"o que você viu na minha
-  tela?"* — ela deve conseguir voltar ao assunto.
-- [ ] Trocar para **"VoxFlow captura"** e pedir de novo: a resposta chega em torno de
-  **10 s**, mas essa imagem **não** entra na sessão do Hermes nem aparece no app dele.
+- [ ] Com **"VoxFlow captura"** (padrão): a resposta deve chegar em torno de **10 s**.
+- [ ] Trocar para **"Ela olha com a ferramenta dela"** e pedir de novo: vai demorar
+  minutos. Confirmar que a conversa aparece no **app desktop do Hermes**, no grupo
+  **API** da barra lateral (ele vem fechado — precisa clicar para abrir).
 - [ ] Desmarcar **Permitir screenshot por comando** e pedir: ela deve recusar dizendo que
   a captura está desligada, em vez de tentar.
 

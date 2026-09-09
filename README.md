@@ -91,12 +91,12 @@ a pergunta junto com a captura.
 
 **Quem olha a tela** (Ajustes → Hermes) decide entre duas coisas diferentes:
 
-- **Ela olha** (padrão) — a Friday usa a ferramenta dela. O pedido, a captura e a resposta
-  ficam na sessão do Hermes, então a conversa **aparece no app desktop dele** e ela pode
-  voltar ao assunto depois. Custa cerca de 170 s, porque ela procura a ferramenta antes.
-- **VoxFlow captura** — a captura é feita aqui e enviada junto. Responde em torno de 10 s,
-  mas a imagem não entra na sessão: esse caminho usa outro endpoint, cujo histórico mora
-  em outro lugar.
+- **VoxFlow captura** (padrão) — a captura é feita aqui e enviada junto com a pergunta.
+  Responde em torno de 10 s.
+- **Ela olha com a ferramenta dela** — a Friday tira o próprio print. O pedido, a captura
+  e a resposta ficam na sessão do Hermes. Mede-se em minutos, não em segundos, e o motivo
+  não é o VoxFlow: cada passo exige uma resposta nova do modelo, e a latência dele varia
+  muito (2,7 s e 23,6 s para a mesma frase trivial, medidos em seguida um do outro).
 
 Cada conversa é gravada em `Documentos\VoxFlow\sessions\AAAA-MM-DD.md`, um arquivo por
 dia, escrito turno a turno — fechar a janela não perde o que já foi dito. Dizer *"encerra

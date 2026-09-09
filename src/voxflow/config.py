@@ -133,7 +133,7 @@ class HermesConfig(StrictModel):
     #: and that endpoint keeps its history in a different store, so the picture never
     #: reaches the session. Measured, not assumed: an image sent that way left no trace
     #: in ``state.db``. Kept for a Hermes without the tool.
-    screenshot_source: Literal["hermes_tool", "voxflow"] = "hermes_tool"
+    screenshot_source: Literal["hermes_tool", "voxflow"] = "voxflow"
     #: Written for a tutor who is heard, not read. The length is left to the question:
     #: a fixed word cap made her cut explanations short exactly when depth was asked for.
     instructions: str = (
