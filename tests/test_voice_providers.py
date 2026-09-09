@@ -7,6 +7,7 @@ and a voice list never leaks across providers — an Edge name means nothing to 
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -235,3 +236,49 @@ def test_nothing_is_disturbed_when_she_is_only_listening() -> None:
     VoxFlowController._recover_from_lost_voice(fake, "Voz indisponível")
 
     assert seen == []
+
+
+# --- Edge has to be asked for word boundaries ---------------------------------------
+
+
+def test_edge_asks_for_word_boundaries() -> None:
+    """edge-tts 7.x defaults to SentenceBoundary — one event for the whole sentence.
+
+    The provider that exists precisely because it knows where each word falls was
+    answering "I do not know", so the highlight ran on estimates while the log
+    announced `timings=reported`. Measured after the fix: 8 words, 8 timings.
+    """
+
+    captured: dict[str, object] = {}
+
+    class FakeCommunicate:
+        def __init__(self, text: str, voice: str, **options: object) -> None:
+            captured.update(options)
+            captured["text"] = text
+            captured["voice"] = voice
+
+        async def stream(self):  # noqa: ANN202
+            yield {"type": "audio", "data": b"x"}
+            yield {"type": "WordBoundary", "offset": 500_000, "duration": 4_250_000, "text": "oi"}
+
+    import sys
+    import types
+
+    module = types.ModuleType("edge_tts")
+    module.Communicate = FakeCommunicate  # type: ignore[attr-defined]
+    original = sys.modules.get("edge_tts")
+    sys.modules["edge_tts"] = module
+    try:
+        from voxflow.hermes.synthesizers import EdgeSynthesizer
+
+        words = EdgeSynthesizer("pt-BR-ThalitaMultilingualNeural", "+0%").synthesize(
+            "oi", Path(tempfile.gettempdir()) / "voxflow-edge-test.mp3"
+        )
+    finally:
+        if original is not None:
+            sys.modules["edge_tts"] = original
+        else:
+            del sys.modules["edge_tts"]
+
+    assert captured.get("boundary") == "WordBoundary"
+    assert words == [(50.0, 425.0, "oi")]

@@ -124,7 +124,14 @@ class EdgeSynthesizer:
     def synthesize(self, sentence: str, path: Path) -> list[WordTiming]:
         import edge_tts
 
-        communicate = edge_tts.Communicate(sentence, self._voice, rate=self._rate)
+        # `boundary` defaults to SentenceBoundary in edge-tts 7.x, and a sentence
+        # boundary is one event for the whole sentence — useless for a highlight that
+        # moves word by word. Asked for explicitly, the word events come back. Without
+        # this the only provider that knows where its words fall was answering "I do
+        # not know", and the karaoke ran on estimates while the log said "reported".
+        communicate = edge_tts.Communicate(
+            sentence, self._voice, rate=self._rate, boundary="WordBoundary"
+        )
         return asyncio.run(self._collect(communicate, path))
 
     @staticmethod

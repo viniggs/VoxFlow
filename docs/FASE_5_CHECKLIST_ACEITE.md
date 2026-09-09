@@ -106,3 +106,6 @@ Data: 2026-09-09
   falam.
 - [ ] **Salvar configurações enquanto ela fala** e confirmar que a fala para e o painel
   volta a **ouvindo**, em vez de ficar preso em "falando".
+- [ ] Com o **Edge**, confirmar que o realce agora acompanha palavra por palavra com
+  precisão (ele voltou a informar os tempos reais, que estavam desligados).
+- [ ] Testar os três que funcionam — Edge, Kokoro e Windows — e confirmar que todos falam.

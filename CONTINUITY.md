@@ -1626,3 +1626,44 @@ O mesmo buraco engolia o caso do Kokoro quebrado: se toda frase falha na síntes
 `_recover_from_lost_voice()` cobre os dois: estando em `SPEAKING` ou `THINKING`, volta a
 ouvir. Se uma frase seguinte for sintetizada, a reprodução recoloca o estado em falando
 sozinha. Três testes cobrem isso, e reprovam com a correção removida.
+
+### Os cinco providers, exercitados um por um
+
+O usuário cobrou, com razão, que eu tinha consertado só o que gritava no log em vez de
+exercitar todos. Feito: cada provider construído e mandado sintetizar de verdade.
+
+| Provider | Resultado |
+|---|---|
+| Edge | fala em 1,7 s — **mas devolvia zero tempos de palavra** |
+| Kokoro | fala em 1,6 s depois da correção do link |
+| Windows (SAPI) | fala em 0,2 s |
+| OpenAI | sem chave nos segredos, como esperado |
+| Chatterbox | não implementado |
+
+### O Edge tinha parado de dizer onde cada palavra cai
+
+`edge-tts` 7.2.8 tem `boundary: Literal["WordBoundary", "SentenceBoundary"] =
+"SentenceBoundary"`. O padrão mudou, e um limite de **sentença** é um evento só para a
+frase inteira. Medido: `{'audio': 18, 'SentenceBoundary': 1}` e nenhum `WordBoundary`.
+
+Consequência: o único provider que sabe onde cada palavra cai vinha respondendo "não
+sei", o realce caía na estimativa, e o log continuava anunciando `timings=reported` —
+porque esse rótulo vem do nome do provider, não de medição. Pedindo `boundary` de
+propósito: 8 palavras, 8 tempos.
+
+Isso também é metade da queixa original do realce dessincronizado: a 0.7.16 consertou o
+salto do cursor, mas mesmo o Edge estava sendo realçado por estimativa.
+
+### O `config.yaml` do usuário ficou com o caminho lento
+
+A 0.8.0 gravou `screenshot_source: hermes_tool` no arquivo dele. Trocar o padrão no
+código não alcança um valor já persistido, então o arquivo foi atualizado para `voxflow`
+(backup em `config.yaml.bak.pre-screenshot-*`), como já se fez na 0.7.3.
+
+### O que continua faltando: Chatterbox
+
+Segue como `not_implemented`, e não por esquecimento. Ele mora em `C:\AI\Chatterbox-Friday`
+com venv próprio e mais de 2 GB de torch — nada disso entra num instalador de 108 MB, e
+não dá para importar de dentro do processo do VoxFlow. Exige um **processo separado**
+falando com o app, mais um seletor de áudio de referência (a "voz" dele é um arquivo, não
+um nome). É entrega própria, e continua pendente de decisão do usuário.
