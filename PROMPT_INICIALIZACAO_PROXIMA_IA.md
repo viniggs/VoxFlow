@@ -36,7 +36,7 @@ aqui significa apenas o preview na UI: nunca injete parciais no Notepad, Chrome 
 aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa visibilidade em
 todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco horas é crítico.
 
-A versão atual é **0.8.0**/Fase 5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
+A versão atual é **0.8.1**/Fase 5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
 SSE, painel de resposta, TTS por sentença, barge-in, half-duplex e controles de
 health/start/stop. Desde então mudaram coisas que as seções no fim deste arquivo
 detalham — leia-as antes de confiar em qualquer parágrafo anterior a elas.
@@ -393,3 +393,20 @@ A conversa do VoxFlow **já** vive no mesmo `state.db` do app desktop, com
 (`SHGetKnownFolderPath`). `~/Documents` estava errado nesta máquina: o Documentos real é
 `OneDrive\Documentos`, e a pasta antiga também existe — os logs iriam para onde ninguém
 olha.
+
+
+## A demora da Friday não é do VoxFlow (0.8.1)
+
+Medido pelos carimbos de tempo da tabela `messages` do `state.db`: num turno de 170 s, as
+ferramentas custaram 0,0 s e **uma única resposta do modelo levou 130 s**. Num teste
+controlado, "Responda apenas: OK", sem ferramenta nenhuma, respondeu em 2,7 s e depois em
+23,6 s — mesma frase, sessão nova, segundos depois. É o provedor do Hermes.
+
+Por isso o padrão de `hermes.screenshot_source` é `voxflow`: a captura local é um único
+turno de modelo (cerca de 10 s), enquanto pedir que ela olhe custa três ou mais.
+
+Correção de um erro meu na 0.8.0: eu disse que a imagem enviada pelo VoxFlow não aparecia
+no `state.db`. Aparece. O `/v1/responses` escolhe a sessão pelo cabeçalho
+`X-Hermes-Session-Key`, não pelo campo `conversation` — então ela é gravada, só que numa
+sessão diferente da usada pelo `/v1/runs`. É por isso que ela não lembra da imagem nos
+turnos de voz seguintes.

@@ -1,9 +1,9 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-08
-Versão: 0.8.0
+Versão: 0.8.1
 Fase concluída no código: Fase 5, aguardando aceite manual
-Instalador mais recente gerado: 0.8.0 (`releases/fase-5/0.8.0/`)
+Instalador mais recente gerado: 0.8.1 (`releases/fase-5/0.8.1/`)
 O usuário pediu para juntar tudo num teste só: a 0.8.0 carrega a Fase 5 e também
 os itens ainda não aceitos de 0.7.13 a 0.7.16.
 
@@ -1472,3 +1472,84 @@ Validação: Ruff aprovado, 283 testes aprovados, captura real medida (1600×670
 233 ms), turno com imagem respondido em 10,5 s pelo gateway real, turno pela ferramenta
 dela em 170 s com as oito mensagens gravadas na sessão, e o log escrito e lido no
 Documentos real.
+
+
+## 0.8.1 — Onde os 170 segundos foram parar (2026-09-09)
+
+O usuário disse que era óbvio haver algo errado na demora e pediu para eu testar e olhar
+o comportamento no chat da API. Testei. Ele estava certo, e o problema não é do VoxFlow.
+
+### A conta, tirada dos carimbos de tempo do próprio Hermes
+
+A tabela `messages` guarda o horário de cada mensagem. O turno de 170 s:
+
+```
+  17,7s  modelo pensando
+   0,0s  ferramenta tool_search
+ 130,3s  modelo pensando        <- aqui
+   0,0s  ferramenta tool_describe
+   2,8s  modelo pensando
+  16,3s  ferramenta computer_use
+   2,6s  modelo pensando
+```
+
+As ferramentas são de graça. O custo é uma resposta nova do modelo a cada passo, e uma
+delas sozinha levou 130 segundos.
+
+### O modelo é errático, não só lento
+
+Teste controlado, três turnos seguidos pelo `/v1/runs`:
+
+| Turno | Pedido | Tempo |
+|---|---|---|
+| A | "Responda apenas: OK" | **2,7 s** |
+| B | "Responda apenas: OK" (sessão nova, logo depois) | **23,6 s** |
+| C | "Tire um print e diga o que vê" | **62,9 s** |
+
+A mesma frase trivial, sem ferramenta nenhuma, variou quase 9x. Isso é o provedor do
+Hermes (`opencode-go`, modelo `omen-alpha`), não o VoxFlow.
+
+No turno C ela nem usou a mesma ferramenta da outra vez: chamou o **terminal seis vezes**
+e depois `vision_analyze`, e ainda respondeu pela metade — "Print tirado. Agora deixa eu
+olhar a imagem." A estratégia dela muda a cada execução.
+
+### Uma afirmação minha que estava errada
+
+Eu escrevi na 0.8.0 que a imagem enviada pelo VoxFlow "não deixou traço no `state.db`".
+**Deixou.** Eu procurei na sessão errada. Ela foi gravada em `voxflow:estudo-teste-e2e`,
+porque o `/v1/responses` escolhe a sessão pelo cabeçalho `X-Hermes-Session-Key`, e não
+pelo campo `conversation` que eu mandava.
+
+Consequência prática: o caminho rápido **também** aparece no app desktop do Hermes.
+Por isso o padrão voltou a ser `voxflow`.
+
+### O que continua partido
+
+As duas rotas caem em sessões diferentes:
+
+- fala normal vai por `/v1/runs`, na sessão do campo `session_id` (`voxflow:estudo`, 149
+  mensagens);
+- turno com imagem vai por `/v1/responses`, na sessão ligada ao cabeçalho
+  (`voxflow:estudo-2`).
+
+Então ela não vê a imagem nos turnos de voz seguintes. Para unir, basta uma coluna: ligar
+a sessão `voxflow:estudo` a uma chave própria (`sessions.session_key`) e mandar essa chave
+no cabeçalho. Tentei fazer, com backup do `state.db` antes, e o controle de permissões do
+Claude Code bloqueou a escrita. Fica pendente da autorização do usuário.
+
+### A conversa aparece, sim, no app desktop
+
+Verificado com os olhos, abrindo o app: a barra lateral tem os grupos **API**, **DISCORD**
+e **CRON JOBS** recolhidos abaixo de SESSIONS. Dentro de **API** estão as conversas do
+VoxFlow, incluindo a real do usuário — que aparece com o título "Compute 5 factorial",
+porque o Hermes batiza o chat pela primeira mensagem dele.
+
+O capturador do computer-use devolve tela preta para janelas Electron; a captura foi feita
+com `mss`, e o foco da janela precisou ser forçado por `ShowWindow`.
+
+### Arquivos alterados
+
+`src/voxflow/config.py` (padrão `screenshot_source: voxflow`),
+`src/voxflow/ui/settings.py`, `README.md`, `docs/FASE_5_CHECKLIST_ACEITE.md`.
+
+Validação: Ruff aprovado, 283 testes aprovados, e as medições acima contra o gateway real.

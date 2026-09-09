@@ -72,3 +72,19 @@ Em Ajustes → Hermes → **Quem olha a tela**:
   voz** alcança as demais.
 - [ ] **Bandeja (0.7.13):** clicar no ícone com o app aberto traz a janela de volta em
   vez de abrir uma segunda cópia.
+
+
+---
+
+# VoxFlow 0.8.1 — Captura rápida como padrão
+
+Data: 2026-09-09
+
+- [ ] Dizer **"olha minha tela"** e cronometrar: a resposta deve chegar em torno de
+  **10 segundos**, não em minutos.
+- [ ] Abrir o app desktop do Hermes, clicar no grupo **API** da barra lateral e confirmar
+  que esse turno aparece lá.
+- [ ] Saber o que **não** funciona ainda: perguntar depois, por voz, *"o que você viu na
+  minha tela?"* — ela não vai lembrar, porque o turno com imagem cai numa sessão
+  diferente da conversa por voz. A união depende de uma autorização de escrita no banco
+  do Hermes.
