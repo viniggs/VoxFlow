@@ -20,6 +20,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="voxflow")
     parser.add_argument("--check", action="store_true", help="valida configuração e microfone")
     parser.add_argument("--quit", action="store_true", help="encerra a instância em execução")
+    parser.add_argument(
+        "--check-voices",
+        action="store_true",
+        help="faz cada voz disponível falar uma frase e diz o que aconteceu",
+    )
     parser.add_argument("--version", action="version", version=f"VoxFlow {__version__}")
     return parser
 
@@ -28,7 +33,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     paths = get_app_paths()
     paths.ensure_directories()
-    configure_logging(paths.log_dir, console=args.check or args.quit)
+    configure_logging(paths.log_dir, console=args.check or args.quit or args.check_voices)
     if args.quit:
         from voxflow.single_instance import request_running_instance_quit
 
@@ -45,6 +50,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Exception:
         logger.exception("Falha ao carregar a configuração")
         return 2
+    if args.check_voices:
+        from voxflow.diagnostics import check_voices
+
+        report = check_voices(config)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        broken = [item for item in report if item["result"] not in {"ok", "skipped"}]
+        return 1 if broken else 0
     if args.check:
         result = run_check(config, paths)
         print(json.dumps(result.as_dict(), ensure_ascii=False, indent=2))

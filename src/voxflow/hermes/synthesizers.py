@@ -349,6 +349,27 @@ class KokoroSynthesizer:
         return []
 
 
+class ChatterboxSynthesizer:
+    """Chatterbox, spoken by its own process so the model is loaded once.
+
+    The "voice" here is a reference recording rather than a name — leave it empty for
+    the model's own voice, or point `tts.chatterbox_voice` at a wav to be imitated.
+    """
+
+    suffix = ".wav"
+
+    def __init__(self, root: str, reference: str = "") -> None:
+        self._root = root
+        self._reference = reference
+
+    def synthesize(self, sentence: str, path: Path) -> list[WordTiming]:
+        from voxflow.hermes.chatterbox import ChatterboxSpeaker, default_device
+
+        speaker = ChatterboxSpeaker.shared(self._root, default_device())
+        speaker.say(sentence, path, self._reference)
+        return []
+
+
 def build(config: TTSConfig, *, secrets: SecretStore | None = None) -> Synthesizer:
     """Pick the synthesizer for the configured provider.
 
@@ -367,7 +388,12 @@ def build(config: TTSConfig, *, secrets: SecretStore | None = None) -> Synthesiz
             return OpenAISynthesizer(config.voice, config.rate, key)
         logger.warning("tts_provider_unavailable provider=openai reason=missing_key fallback=edge")
     elif provider == "chatterbox":
+        from voxflow.hermes.chatterbox import installed
+
+        ready, detail = installed(config.chatterbox_path)
+        if ready:
+            return ChatterboxSynthesizer(config.chatterbox_path, config.chatterbox_voice)
         logger.warning(
-            "tts_provider_unavailable provider=chatterbox reason=not_integrated fallback=edge"
+            "tts_provider_unavailable provider=chatterbox reason={!r} fallback=edge", detail
         )
     return EdgeSynthesizer(config.voice, config.rate)

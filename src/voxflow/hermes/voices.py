@@ -172,6 +172,10 @@ def voices_for(
         return sapi_voices()
     if provider == KOKORO:
         return list(_KOKORO_VOICES)
+    if provider == CHATTERBOX:
+        # Its "voice" is a recording, not a name. Empty means the model's own voice; a
+        # reference file is chosen in the settings.
+        return [Voice("", "Voz própria do modelo", "Própria")]
     return []
 
 
@@ -183,7 +187,10 @@ def default_voice(provider: str) -> str:
 
 
 def providers(
-    *, secrets: SecretStore | None = None, kokoro_path: str = ""
+    *,
+    secrets: SecretStore | None = None,
+    kokoro_path: str = "",
+    chatterbox_path: str = "",
 ) -> list[Provider]:
     """Every provider, and whether this machine can actually run it.
 
@@ -196,6 +203,7 @@ def providers(
 
     windows_voices = sapi_voices()
     kokoro_ready = _kokoro_available(kokoro_path)
+    chatterbox_ready, chatterbox_detail = _chatterbox_available(chatterbox_path)
     has_openai_key = bool(store.get("openai"))
 
     return [
@@ -238,13 +246,9 @@ def providers(
         Provider(
             CHATTERBOX,
             "Chatterbox (local, GPU)",
-            False,
-            (
-                "Ainda não integrado: a voz do Chatterbox é um áudio de referência, não "
-                "um nome, e o modelo precisa de um processo próprio para não recarregar "
-                "a cada frase."
-            ),
-            NOT_IMPLEMENTED,
+            chatterbox_ready,
+            chatterbox_detail,
+            READY if chatterbox_ready else NEEDS_SETUP,
         ),
     ]
 
@@ -257,6 +261,22 @@ def available(
         for item in providers(secrets=secrets, kokoro_path=kokoro_path)
         if item.available
     ]
+
+
+def _chatterbox_available(chatterbox_path: str = "") -> tuple[bool, str]:
+    """Chatterbox speaks through its own process, so this asks whether that can start.
+
+    It was listed as "not implemented" until the worker existed; now the question is
+    only whether this machine has the environment it lives in.
+    """
+
+    try:
+        from voxflow.hermes.chatterbox import installed
+
+        return installed(chatterbox_path)
+    except Exception as exc:  # noqa: BLE001 - probing must never break the settings UI
+        logger.warning("chatterbox_probe_failed error={!s}", exc)
+        return False, f"Não consegui verificar o Chatterbox: {type(exc).__name__}"
 
 
 def _kokoro_available(kokoro_path: str = "") -> bool:

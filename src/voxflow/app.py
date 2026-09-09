@@ -33,6 +33,9 @@ from voxflow.text.cleanup import DictationCleaner
 from voxflow.text.context import ActiveApp, get_active_app, resolve_app_rule
 from voxflow.text.inject import ClipboardInjector
 
+#: The phase this build implements, for the log line that used to say 4.5 forever.
+PHASE = "5"
+
 
 class DictationState(enum.StrEnum):
     IDLE = "idle"
@@ -242,8 +245,29 @@ class VoxFlowController(QObject):
         self._apply_bindings()
         self._hotkey.start()
         self._executor.submit(self._stt.warmup)
-        logger.info("voxflow_ready phase=4.5 hotkeys=ctrl+num_add,f9,num_add")
-        self._signals.status_changed.emit("Pronto — segure Ctrl + Numpad + para ditar")
+        # Written from the configuration, not by hand. The old line announced phase 4.5
+        # and the default keys forever, so a log from a machine with its own shortcuts
+        # described somebody else's — this one showed `f9` while the key was `f8`.
+        logger.info(
+            "voxflow_ready phase={} hotkeys={}",
+            PHASE,
+            ",".join(
+                value
+                for value in (
+                    self._config.hotkeys.dictation_hold,
+                    self._config.hotkeys.hermes_toggle,
+                    self._config.hotkeys.hermes_push_to_talk,
+                )
+                if value
+            ),
+        )
+        self._signals.status_changed.emit(f"Pronto — segure {self._dictation_key()} para ditar")
+
+    def _dictation_key(self) -> str:
+        """The dictation shortcut as the user reads it, whatever they bound it to."""
+
+        binding = parse(self._config.hotkeys.dictation_hold)
+        return binding.label() if binding is not None else "o atalho de ditado"
 
     def _apply_bindings(self) -> None:
         keys = self._config.hotkeys

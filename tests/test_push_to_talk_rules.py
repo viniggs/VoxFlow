@@ -331,3 +331,35 @@ def test_a_held_key_outranks_the_detector_in_continuous_mode(controller) -> None
     controller._talk_active = True
     controller._hermes_tick()
     assert controller._vad.fed == 0
+
+
+def test_the_startup_line_reports_the_keys_actually_bound() -> None:
+    """It announced `phase=4.5 hotkeys=ctrl+num_add,f9,num_add` no matter what.
+
+    A log from a machine with its own shortcuts described somebody else's — this user's
+    said `f9` while the key was `f8`. Shortcuts have been configurable since 0.7.6.
+    """
+
+    from types import SimpleNamespace
+
+    from voxflow.app import PHASE, VoxFlowController
+
+    assert PHASE == "5"
+
+    fake = SimpleNamespace(
+        _config=SimpleNamespace(
+            hotkeys=SimpleNamespace(dictation_hold="ctrl+a", hermes_toggle="f8")
+        )
+    )
+    assert VoxFlowController._dictation_key(fake) == "Ctrl + A"
+
+
+def test_an_unreadable_shortcut_does_not_break_the_greeting() -> None:
+    from types import SimpleNamespace
+
+    from voxflow.app import VoxFlowController
+
+    fake = SimpleNamespace(
+        _config=SimpleNamespace(hotkeys=SimpleNamespace(dictation_hold=""))
+    )
+    assert VoxFlowController._dictation_key(fake) == "o atalho de ditado"

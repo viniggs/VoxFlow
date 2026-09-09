@@ -36,7 +36,7 @@ aqui significa apenas o preview na UI: nunca injete parciais no Notepad, Chrome 
 aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa visibilidade em
 todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco horas é crítico.
 
-A versão atual é **0.8.2**/Fase 5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
+A versão atual é **0.8.6**/Fase 5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
 SSE, painel de resposta, TTS por sentença, barge-in, half-duplex e controles de
 health/start/stop. Desde então mudaram coisas que as seções no fim deste arquivo
 detalham — leia-as antes de confiar em qualquer parágrafo anterior a elas.
@@ -424,3 +424,29 @@ hardlink em `%LOCALAPPDATA%\VoxFlow\models\<nome>` e carregue de lá. E sonde o 
 físico (`_physical`), não o link.
 
 Sintoma para reconhecer: o `--check` acha o modelo e o aplicativo em execução não.
+
+
+## Prove a voz fazendo ela falar (0.8.3)
+
+`voxflow --check-voices` sintetiza uma frase com cada provider disponível. Use-o **no
+executável instalado**, não só pelo código: o Kokoro construía sem erro enquanto não
+achava o modelo, e o Edge respondia sem tempos de palavra. Construir não é falar.
+
+
+## Chatterbox roda fora do processo (0.8.4)
+
+Ele tem ambiente Python próprio e 2 GB de torch: não é importável nem empacotável.
+`packaging/chatterbox_worker.py` roda no Python dele e mantém o modelo carregado;
+`hermes/chatterbox.py` conversa por stdin/stdout. Carga 10,5 s uma vez, 2,2 s por frase.
+
+Armadilha: rodar um arquivo de script põe a pasta **do script** no `sys.path`, não o
+`cwd`. A raiz do Chatterbox é passada como argumento e inserida no path — sem isso,
+`import chatterbox` falha.
+
+
+## Um processo filho herda o Python do pai (0.8.5)
+
+O worker do Chatterbox (3.11) subia encontrando o `python312.dll` do VoxFlow empacotado e
+morria com "Module use of python312.dll conflicts with this version of Python". Qualquer
+processo externo iniciado pelo app precisa de `child_environment()`: sem `PYTHONHOME`,
+`PYTHONPATH`, e sem a pasta do interpretador no `PATH`.

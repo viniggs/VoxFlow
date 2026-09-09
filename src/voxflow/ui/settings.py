@@ -312,7 +312,10 @@ class SettingsWindow(CosmicPanel):
         source_index = self._screenshot_source.findData(self._config.hermes.screenshot_source)
         self._screenshot_source.setCurrentIndex(max(source_index, 0))
         self._tts_provider = QComboBox()
-        for entry in tts_providers(kokoro_path=self._config.hermes.tts.kokoro_path):
+        for entry in tts_providers(
+            kokoro_path=self._config.hermes.tts.kokoro_path,
+            chatterbox_path=self._config.hermes.tts.chatterbox_path,
+        ):
             self._tts_provider.addItem(f"{entry.label}{entry.suffix}", entry.name)
         provider_index = self._tts_provider.findData(self._config.hermes.tts.provider)
         self._tts_provider.setCurrentIndex(max(provider_index, 0))
@@ -338,6 +341,16 @@ class SettingsWindow(CosmicPanel):
         self._tts_voice.currentIndexChanged.connect(self._emit_voice)
         self._tts_rate = QLineEdit(self._config.hermes.tts.rate)
         self._chatterbox_path = QLineEdit(self._config.hermes.tts.chatterbox_path)
+        self._chatterbox_voice = QLineEdit(self._config.hermes.tts.chatterbox_voice)
+        self._chatterbox_voice.setPlaceholderText("vazio = voz própria do modelo")
+        pick_reference = QPushButton("Escolher…")
+        pick_reference.setProperty("role", "ghost")
+        pick_reference.clicked.connect(self._pick_chatterbox_voice)
+        self._chatterbox_voice_row = QWidget()
+        reference_layout = QHBoxLayout(self._chatterbox_voice_row)
+        reference_layout.setContentsMargins(0, 0, 0, 0)
+        reference_layout.addWidget(self._chatterbox_voice, 1)
+        reference_layout.addWidget(pick_reference)
         self._hermes_instructions = self._editor(self._config.hermes.instructions, 105)
         self._hermes_status = QLabel("Ainda não verificado")
         health_button = QPushButton("Testar conexão")
@@ -374,6 +387,7 @@ class SettingsWindow(CosmicPanel):
         form.addRow("Voz:", self._tts_voice)
         form.addRow("Velocidade:", self._tts_rate)
         form.addRow("Chatterbox:", self._chatterbox_path)
+        form.addRow("Voz de referência:", self._chatterbox_voice_row)
         form.addRow("Como ela ouve:", self._listen_mode)
         form.addRow("Instruções do tutor:", self._hermes_instructions)
         form.addRow("Serviço:", controls)
@@ -516,7 +530,10 @@ class SettingsWindow(CosmicPanel):
         entry = next(
             (
                 item
-                for item in tts_providers(kokoro_path=self._config.hermes.tts.kokoro_path)
+                for item in tts_providers(
+                    kokoro_path=self._config.hermes.tts.kokoro_path,
+                    chatterbox_path=self._config.hermes.tts.chatterbox_path,
+                )
                 if item.name == provider
             ),
             None,
@@ -596,6 +613,21 @@ class SettingsWindow(CosmicPanel):
             return
         self._fill_voices(str(self._tts_provider.currentData() or "edge"))
         self._result.setText(f"{len(edge_catalogue.read_cache())} vozes do Edge carregadas.")
+
+    def _pick_chatterbox_voice(self) -> None:
+        """Chatterbox imitates a recording, so the voice is chosen as a file."""
+
+        from PySide6.QtWidgets import QFileDialog
+
+        chosen, _filter = QFileDialog.getOpenFileName(
+            self,
+            "Gravação que o Chatterbox deve imitar",
+            self._chatterbox_voice.text().strip() or self._chatterbox_path.text().strip(),
+            "Áudio (*.wav *.mp3 *.flac *.ogg);;Todos os arquivos (*)",
+        )
+        if chosen:
+            self._chatterbox_voice.setText(chosen)
+            self.save(show_dialog=False)
 
     def _on_provider_picked(self, index: int) -> None:
         del index
@@ -722,6 +754,7 @@ class SettingsWindow(CosmicPanel):
                 ).strip(),
                 "rate": self._tts_rate.text().strip(),
                 "chatterbox_path": self._chatterbox_path.text().strip(),
+                "chatterbox_voice": self._chatterbox_voice.text().strip(),
             }
         )
         hermes = self._config.hermes.model_copy(

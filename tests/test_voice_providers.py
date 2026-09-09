@@ -59,14 +59,21 @@ def test_openai_without_a_key_falls_back_rather_than_going_silent() -> None:
     assert isinstance(built, EdgeSynthesizer)
 
 
-def test_chatterbox_is_honest_about_not_being_integrated() -> None:
-    built = build(config("chatterbox"), secrets=FakeSecrets())
+def test_chatterbox_falls_back_when_its_environment_is_missing() -> None:
+    """It is implemented now, through a process of its own. On a machine without that
+    environment the conversation still speaks, and the reason is written down."""
+
+    settings = config("chatterbox").model_copy(update={"chatterbox_path": ""})
+    built = build(settings, secrets=FakeSecrets())
     assert isinstance(built, EdgeSynthesizer)
+
     entry = next(
-        item for item in voices.providers(secrets=FakeSecrets()) if item.name == "chatterbox"
+        item
+        for item in voices.providers(secrets=FakeSecrets(), chatterbox_path="")
+        if item.name == "chatterbox"
     )
     assert not entry.available
-    assert entry.detail
+    assert "não configurada" in entry.detail
 
 
 # --- voice lists stay with their provider ----------------------------------------
@@ -80,7 +87,7 @@ def test_each_provider_offers_only_its_own_voices() -> None:
 
 
 def test_an_unknown_provider_offers_nothing_rather_than_guessing() -> None:
-    assert voices.voices_for("chatterbox") == []
+    assert voices.voices_for("telepatia") == []
 
 
 def test_short_names_are_unique_within_a_provider() -> None:
@@ -174,15 +181,19 @@ def test_a_synthesizer_writes_where_it_is_told(tmp_path: Path) -> None:
 # --- "unavailable" is not one thing ------------------------------------------------
 
 
-def test_a_missing_key_and_missing_code_read_differently() -> None:
-    # Reading "indisponível" for both is what made a provider that was never written
-    # look like one that simply was not found on the machine.
-    from voxflow.hermes.voices import NEEDS_SETUP, NOT_IMPLEMENTED
+def test_a_provider_that_needs_something_says_so() -> None:
+    # Reading "indisponível" for everything is what made a missing key look like missing
+    # code. Both of these want something from the machine, and both say what.
+    from voxflow.hermes.voices import NEEDS_SETUP
 
-    found = {item.name: item for item in voices.providers(secrets=FakeSecrets())}
+    found = {
+        item.name: item
+        for item in voices.providers(secrets=FakeSecrets(), chatterbox_path="")
+    }
     assert found["openai"].status == NEEDS_SETUP
-    assert found["chatterbox"].status == NOT_IMPLEMENTED
-    assert found["openai"].suffix != found["chatterbox"].suffix
+    assert found["chatterbox"].status == NEEDS_SETUP
+    assert found["openai"].suffix == "  (falta configurar)"
+    assert found["openai"].detail != found["chatterbox"].detail
 
 
 def test_a_ready_provider_carries_no_suffix() -> None:
@@ -378,3 +389,72 @@ def test_the_deferred_voice_takes_over_when_she_stops() -> None:
     VoxFlowController._on_tts_idle(fake)
 
     assert replaced == ["trocou"]
+
+
+# --- Chatterbox speaks through its own process --------------------------------------
+
+
+def test_chatterbox_reports_what_is_missing(tmp_path: Path) -> None:
+    """It used to say "not implemented", which sent the user looking at their machine
+    for something that did not exist in the code. Now the code exists, and what is
+    reported is what is actually absent."""
+
+    from voxflow.hermes.chatterbox import installed
+
+    ready, detail = installed("")
+    assert ready is False
+    assert "não configurada" in detail
+
+    ready, detail = installed(str(tmp_path / "nao-existe"))
+    assert ready is False
+    assert "não encontrada" in detail
+
+    lonely = tmp_path / "chatterbox"
+    (lonely / "chatterbox" / "src").mkdir(parents=True)
+    ready, detail = installed(str(lonely))
+    assert ready is False
+    assert "Ambiente Python" in detail
+
+
+def test_the_worker_travels_with_the_application() -> None:
+    # It runs under Chatterbox's own Python, so it ships as a file rather than as a
+    # frozen module. A build that forgets it fails here instead of on a user's machine.
+    from voxflow.hermes.chatterbox import worker_script
+
+    assert worker_script().is_file()
+    spec = (Path(__file__).resolve().parents[1] / "packaging" / "voxflow.spec").read_text(
+        encoding="utf-8"
+    )
+    assert "chatterbox_worker.py" in spec
+
+
+def test_the_chatterbox_voice_is_a_recording_not_a_name() -> None:
+    from voxflow.hermes.voices import CHATTERBOX, voices_for
+
+    found = voices_for(CHATTERBOX)
+
+    assert [voice.identifier for voice in found] == [""]
+
+
+def test_the_worker_does_not_inherit_our_python() -> None:
+    """A child process inherits the parent's environment, and that broke it.
+
+    The worker runs Python 3.11 while the packaged VoxFlow is a frozen 3.12. Starting
+    it with our PATH made it find `python312.dll` and refuse:
+    "Module use of python312.dll conflicts with this version of Python." Invisible from
+    source — there is no bundled runtime to collide with — and caught only by running
+    the voice check against the installed executable.
+    """
+
+    import os
+    import sys
+
+    from voxflow.hermes.chatterbox import child_environment
+
+    environment = child_environment()
+
+    assert "PYTHONHOME" not in environment
+    assert "PYTHONPATH" not in environment
+    ours = str(Path(sys.executable).parent).casefold()
+    entries = [item.casefold() for item in environment["PATH"].split(os.pathsep)]
+    assert ours not in entries

@@ -101,6 +101,8 @@ class TTSConfig(StrictModel):
     voice: str = "pt-BR-ThalitaMultilingualNeural"
     rate: str = "+5%"
     chatterbox_path: str = r"C:\AI\Chatterbox-Friday"
+    #: Gravação de referência que o Chatterbox imita. Vazio usa a voz própria do modelo.
+    chatterbox_voice: str = ""
     #: Vazio significa procurar o modelo no cache do HuggingFace e na pasta de
     #: modelos do VoxFlow. Preencha só para apontar uma cópia fora do caminho.
     kokoro_path: str = ""

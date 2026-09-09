@@ -20,6 +20,9 @@ analysis = Analysis(
         # kokoro_onnx lê o próprio config.json em tempo de execução; sem ele o
         # provider carrega no código-fonte e falha só no aplicativo empacotado.
         *collect_data_files("kokoro_onnx"),
+        # O worker do Chatterbox roda no Python do ambiente dele, não neste, então
+        # ele viaja como arquivo e não como módulo empacotado.
+        (str(project_root / "packaging" / "chatterbox_worker.py"), "."),
     ],
     hiddenimports=[
         "keyring.backends.Windows",

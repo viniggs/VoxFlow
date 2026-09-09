@@ -115,3 +115,56 @@ Data: 2026-09-09
 - [ ] **Trocar a voz enquanto ela fala**: a frase em curso deve terminar inteira, o
   painel avisa que a troca vale ao terminar, e a voz nova aparece na resposta seguinte.
   Nada de fala cortada nem de painel preso.
+
+---
+
+# VoxFlow 0.8.3 — Provar que cada voz fala
+
+Data: 2026-09-09
+
+- [ ] Rodar no PowerShell, com o app instalado:
+
+  ```powershell
+  & "$env:LOCALAPPDATA\Programs\VoxFlow\VoxFlow.exe" --check-voices
+  ```
+
+- [ ] Confirmar `"result": "ok"` para **edge**, **kokoro** e **sapi**, com bytes de áudio
+  maiores que zero.
+- [ ] Confirmar que o **edge** traz `word_timings` maior que zero — é o que faz o realce
+  ser exato em vez de estimado.
+- [ ] OpenAI e Chatterbox devem aparecer como `skipped`, com o motivo escrito.
+
+---
+
+# VoxFlow 0.8.4 — Chatterbox falando
+
+Data: 2026-09-09
+
+- [ ] Ajustes → Hermes: confirmar que o **Chatterbox** aparece **sem** "(ainda não
+  implementado)" e sem "(falta configurar)".
+- [ ] Escolher Chatterbox e falar com a Friday: a **primeira** frase demora uns 15 s
+  (o modelo carregando) e as seguintes saem em torno de 2 s.
+- [ ] Em **Voz de referência**, escolher um `.wav` de alguém e confirmar que a voz muda.
+  Deixar vazio volta para a voz própria do modelo.
+- [ ] Rodar `VoxFlow.exe --check-voices` e confirmar `"result": "ok"` para o chatterbox.
+
+---
+
+# VoxFlow 0.8.5 — Chatterbox no app instalado
+
+Data: 2026-09-09
+
+- [ ] Rodar `VoxFlow.exe --check-voices` e confirmar `result=ok` para **os quatro**:
+  edge, kokoro, sapi e chatterbox.
+- [ ] Confirmar que o chatterbox leva uns 15 s nessa primeira vez (carga do modelo).
+
+---
+
+# VoxFlow 0.8.6 — O log diz a verdade
+
+Data: 2026-09-09
+
+- [ ] Abrir o app e conferir no log a linha `voxflow_ready`: a fase deve ser **5** e os
+  atalhos devem ser **os teus** (`ctrl+num_add`, `f8`, `ctrl+num_multiply`), não os
+  padrões.
+- [ ] Conferir que a mensagem "Pronto — segure ... para ditar" nomeia o teu atalho.

@@ -1,9 +1,9 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-08
-Versão: 0.8.2
+Versão: 0.8.6
 Fase concluída no código: Fase 5, aguardando aceite manual
-Instalador mais recente gerado: 0.8.2 (`releases/fase-5/0.8.2/`)
+Instalador mais recente gerado: 0.8.6 (`releases/fase-5/0.8.6/`)
 O usuário pediu para juntar tudo num teste só: a 0.8.0 carrega a Fase 5 e também
 os itens ainda não aceitos de 0.7.13 a 0.7.16.
 
@@ -1708,3 +1708,134 @@ uma rede para o caso de um sintetizador falhar de verdade, não a explicação d
 Dois testes exercitam o método real: escolher voz durante a fala **não** troca o
 sintetizador e deixa a troca pendente; escolher com ela calada troca na hora. Removida a
 espera, o primeiro reprova.
+
+
+## 0.8.3 — Uma voz só está boa quando ela fala (2026-09-09)
+
+Duas vezes seguidas eu declarei voz consertada olhando para o lugar errado: o Kokoro
+*construía* sem erro enquanto não achava o modelo, e o Edge *respondia* sem os tempos de
+palavra que são a razão de ele existir. Construir um sintetizador não prova nada.
+
+`voxflow --check-voices` faz cada provider disponível **falar uma frase** e diz o que
+voltou: milissegundos, bytes de áudio, quantos tempos de palavra e qual classe atendeu.
+Um provider indisponível é reportado como `skipped` com o motivo, e o comando sai com
+código 1 se algum dos disponíveis falhar.
+
+Importa que ele rode **de dentro do executável empacotado**: foi exatamente ali que o
+mesmo binário respondeu diferente do console, e nenhum teste de código-fonte teria
+pegado o link simbólico do Kokoro.
+
+### Arquivos alterados
+
+`src/voxflow/diagnostics.py`, `src/voxflow/main.py`.
+
+
+## 0.8.4 — O Chatterbox virou voz de verdade (2026-09-09)
+
+Era o último provider que não falava, marcado como `not_implemented` desde a 0.7.8. O
+usuário cobrou que "todos os providers funcionando" não era pedido de imbecil, e estava
+certo: faltava construir, não faltava razão.
+
+### Por que ele não podia ser importado
+
+Ele mora em `C:\AI\Chatterbox-Friday`, com **ambiente Python próprio** (3.11) e mais de
+2 GB de torch. Não entra num instalador de 108 MB e não pode ser importado para dentro
+do processo do VoxFlow, que roda outro Python.
+
+### O que a medição mostrou
+
+Carregar o modelo custa **10,5 s**; sintetizar custa **1,4 s para 3,1 s de áudio** — mais
+rápido que o tempo real. O problema nunca foi a síntese: era pagar a carga a cada frase.
+
+### Como ficou
+
+`packaging/chatterbox_worker.py` roda **no Python do Chatterbox**, mantém o modelo
+carregado e conversa por stdin/stdout, uma linha JSON por pedido.
+`hermes/chatterbox.py` é o lado do VoxFlow: um processo por execução, com timeouts
+separados para a carga e para cada frase, e mensagem clara quando o ambiente falta.
+
+Medido de ponta a ponta pelo caminho real do app: worker pronto em **12,6 s**, primeira
+frase 16,2 s (inclui a carga), **segunda frase 2,2 s**. Comparável ao Edge.
+
+Detalhe que custou uma tentativa: rodar um **arquivo** de script põe a pasta do script no
+início do `sys.path`, não o diretório de trabalho. O `import chatterbox` procurava dentro
+da pasta do VoxFlow e falhava. A raiz agora é passada como argumento e inserida no path.
+
+A "voz" do Chatterbox é uma **gravação de referência**, não um nome: `tts.chatterbox_voice`
+guarda o caminho, com um seletor de arquivo em Ajustes, e vazio usa a voz própria do
+modelo.
+
+### Arquivos alterados
+
+`packaging/chatterbox_worker.py` (novo), `src/voxflow/hermes/chatterbox.py` (novo),
+`src/voxflow/hermes/synthesizers.py`, `src/voxflow/hermes/voices.py`,
+`src/voxflow/config.py`, `src/voxflow/ui/settings.py`, `src/voxflow/diagnostics.py`,
+`packaging/voxflow.spec`, `tests/test_voice_providers.py`.
+
+
+## 0.8.5 — O worker herdava o Python errado (2026-09-09)
+
+O `--check-voices` rodado **no executável instalado** pegou o que nenhum teste de
+código-fonte pegaria:
+
+```
+voice_check provider=chatterbox result=failed
+error=ImportError: Module use of python312.dll conflicts with this version of Python.
+```
+
+O worker roda Python 3.11 e o VoxFlow empacotado é um Python 3.12 congelado. Um processo
+filho herda o ambiente do pai, então o 3.11 subia encontrando o `python312.dll` do
+VoxFlow no `PATH` e se recusava a iniciar. Pelo código-fonte isso não acontece — não há
+runtime empacotado para colidir —, e foi exatamente por isso que a verificação foi feita
+contra o executável instalado.
+
+`child_environment()` monta o ambiente do filho sem `PYTHONHOME`, `PYTHONPATH`,
+`PYTHONSTARTUP` e `PYTHONEXECUTABLE`, e tira do `PATH` a pasta do interpretador e a do
+bundle. Há teste.
+
+### Arquivos alterados
+
+`src/voxflow/hermes/chatterbox.py`, `tests/test_voice_providers.py`.
+
+
+## 0.8.6 — A linha de abertura mentia duas vezes (2026-09-09)
+
+`voxflow_ready phase=4.5 hotkeys=ctrl+num_add,f9,num_add` era texto fixo. A fase parou na
+4.5 e os atalhos são configuráveis desde a 0.7.6 — o log deste usuário dizia `f9` enquanto
+a tecla dele é `f8`. Um log que descreve a máquina de outra pessoa atrapalha exatamente
+quando é mais necessário. A mensagem "Pronto — segure Ctrl + Numpad + para ditar" tinha o
+mesmo defeito.
+
+As três agora saem da configuração. `PHASE` é uma constante do módulo, e `_dictation_key()`
+usa o mesmo `parse().label()` que a dica da Friday já usava.
+
+### Estado verificado desta madrugada
+
+Com a 0.8.5 instalada e `--check-voices` rodado **no executável instalado**, saída 0:
+
+| Provider | Resultado |
+|---|---|
+| edge | ok, 1709 ms, **5 tempos de palavra** |
+| kokoro | ok, 1965 ms |
+| sapi | ok, 76 ms |
+| chatterbox | ok, worker pronto em 11,0 s, frase em 12,9 s (inclui a carga) |
+| openai | pulado — falta a chave, que é do usuário |
+
+### Arquivos alterados
+
+`src/voxflow/app.py`, `tests/test_push_to_talk_rules.py`.
+
+### Um achado que não é defeito, mas o usuário precisa saber
+
+Ao conferir a linha de abertura, notei que os atalhos dele mudaram de
+`toggle=f8 talk=ctrl+num_multiply` para os padrões `f9`/`num_add` às **01:12:20 de
+2026-09-09** — quarenta minutos antes de eu tocar em qualquer configuração, e no mesmo
+minuto em que a 0.8.0 começou a falhar no Kokoro.
+
+Investiguei se salvar as configurações apaga atalhos personalizados: **não apaga.**
+Construí uma `SettingsWindow` a partir de um config com `f8`/`ctrl+num_multiply`, os
+widgets mostraram os valores certos e o `save()` os preservou.
+
+Não consegui reproduzir a causa, então não inventei conserto e **não mexi nos atalhos
+dele**. O backup `config.yaml.bak.pre-screenshot-20260909_022255`, de antes de qualquer
+edição minha, já trazia os padrões.
