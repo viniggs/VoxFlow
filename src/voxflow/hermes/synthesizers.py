@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import re
+import shutil
 from pathlib import Path
 from typing import Protocol
 
@@ -53,6 +55,52 @@ def estimate_word_timings(sentence: str, duration_ms: float) -> list[WordTiming]
         timings.append((cursor, span, word))
         cursor += span
     return timings
+
+
+def _physical(path: Path) -> Path:
+    """The real file behind a HuggingFace cache link, or the path unchanged.
+
+    The cache fills its snapshots with links into ``blobs``, and the installed
+    application cannot always follow them — Windows answers 448, and ``is_file`` then
+    reports "no" while the model is sitting right there. That is how Kokoro came to
+    report itself missing on a machine that had it: the probe asked about the link.
+    """
+
+    try:
+        if os.path.islink(str(path)):
+            target = os.readlink(str(path))
+            return Path(os.path.abspath(os.path.join(str(path.parent), target)))
+    except OSError:
+        pass
+    return path
+
+
+def _out_of_the_cache(model: Path, voices: Path) -> tuple[Path, Path]:
+    """Give Kokoro paths that no longer depend on following a link.
+
+    Hardlinked into VoxFlow's own model folder, keeping the file names, so the 330 MB
+    is not duplicated and the loader still sees ``model.onnx``. Whisper has been kept
+    out of the cache this way since phase 2, for exactly this failure; Kokoro was still
+    reading straight from it.
+    """
+
+    if not (os.path.islink(str(model)) or os.path.islink(str(voices))):
+        return model, voices
+    root = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "VoxFlow" / "models" / "kokoro"
+    destinations = (root / "onnx" / model.name, root / voices.name)
+    for source, destination in zip((model, voices), destinations, strict=True):
+        if is_file(destination) and not os.path.islink(str(destination)):
+            continue
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        physical = _physical(source)
+        if not is_file(physical):
+            raise FileNotFoundError(f"arquivo do Kokoro não encontrado: {physical}")
+        try:
+            os.link(str(physical), str(destination))
+        except OSError:
+            shutil.copy2(str(physical), str(destination))
+    logger.info("kokoro_model_materialized path={!r}", str(root))
+    return destinations
 
 
 class Synthesizer(Protocol):
@@ -240,7 +288,10 @@ class KokoroSynthesizer:
         for folder in candidates:
             model = folder / "onnx" / "model.onnx"
             voices = folder / "voices.bin"
-            if is_file(model) and is_file(voices):
+            # Asked of the real file, not of the link: the installed application cannot
+            # always follow a HuggingFace cache link, and the answer would be a silent
+            # "missing" for a model that is present.
+            if is_file(_physical(model)) and is_file(_physical(voices)):
                 return model, voices
         return None
 
@@ -272,7 +323,7 @@ class KokoroSynthesizer:
                     f"Modelo do Kokoro nao encontrado. Baixe onnx/model.onnx e "
                     f"voices.bin de {repo}."
                 )
-            model, voices = found
+            model, voices = _out_of_the_cache(*found)
             espeak = EspeakConfig(
                 lib_path=espeakng_loader.get_library_path(),
                 data_path=espeakng_loader.get_data_path(),

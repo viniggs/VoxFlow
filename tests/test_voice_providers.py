@@ -188,3 +188,50 @@ def test_a_ready_provider_carries_no_suffix() -> None:
     edge = next(item for item in voices.providers(secrets=FakeSecrets()) if item.name == "edge")
     assert edge.available
     assert edge.suffix == ""
+
+
+# --- a voice that stops mid-sentence must not strand the conversation ----------------
+
+
+def _controller_in(state):  # noqa: ANN001, ANN202
+    """A stand-in carrying only what the recovery reads."""
+
+    from types import SimpleNamespace
+
+    seen: list[str] = []
+    fake = SimpleNamespace(
+        _hermes_state=state,
+        _enter_hermes_listening=seen.append,
+    )
+    return fake, seen
+
+
+def test_a_voice_that_cannot_speak_hands_the_turn_back() -> None:
+    """Kokoro failing on every sentence left her mute and the panel stuck on "falando",
+    with the only way out being to close her."""
+
+    from voxflow.app import HermesState, VoxFlowController
+
+    fake, seen = _controller_in(HermesState.SPEAKING)
+    VoxFlowController._recover_from_lost_voice(fake, "Voz indisponível: FileNotFoundError")
+
+    assert seen == ["Voz indisponível: FileNotFoundError"]
+
+
+def test_a_turn_still_being_thought_about_is_handed_back_too() -> None:
+    from voxflow.app import HermesState, VoxFlowController
+
+    fake, seen = _controller_in(HermesState.THINKING)
+    VoxFlowController._recover_from_lost_voice(fake, "Voz indisponível")
+
+    assert seen == ["Voz indisponível"]
+
+
+def test_nothing_is_disturbed_when_she_is_only_listening() -> None:
+    # The recovery must not interrupt a turn that is going fine.
+    from voxflow.app import HermesState, VoxFlowController
+
+    fake, seen = _controller_in(HermesState.LISTENING)
+    VoxFlowController._recover_from_lost_voice(fake, "Voz indisponível")
+
+    assert seen == []

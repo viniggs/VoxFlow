@@ -36,7 +36,7 @@ aqui significa apenas o preview na UI: nunca injete parciais no Notepad, Chrome 
 aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa visibilidade em
 todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco horas é crítico.
 
-A versão atual é **0.8.1**/Fase 5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
+A versão atual é **0.8.2**/Fase 5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
 SSE, painel de resposta, TTS por sentença, barge-in, half-duplex e controles de
 health/start/stop. Desde então mudaram coisas que as seções no fim deste arquivo
 detalham — leia-as antes de confiar em qualquer parágrafo anterior a elas.
@@ -410,3 +410,17 @@ no `state.db`. Aparece. O `/v1/responses` escolhe a sessão pelo cabeçalho
 `X-Hermes-Session-Key`, não pelo campo `conversation` — então ela é gravada, só que numa
 sessão diferente da usada pelo `/v1/runs`. É por isso que ela não lembra da imagem nos
 turnos de voz seguintes.
+
+
+## O link do cache do HuggingFace já mordeu três vezes (0.8.2)
+
+`onnx/model.onnx` e afins são **links simbólicos** para `blobs`. O aplicativo instalado
+nem sempre pode atravessá-los (WinError 448), e `fsprobe.is_file` responde "não" — o
+modelo presente vira modelo ausente, sem erro visível. Aconteceu com o Whisper na Fase 2,
+com `models.py` na 0.7.10 e com o Kokoro na 0.8.1.
+
+Regra: **nunca carregue um modelo direto do cache do HuggingFace.** Materialize por
+hardlink em `%LOCALAPPDATA%\VoxFlow\models\<nome>` e carregue de lá. E sonde o arquivo
+físico (`_physical`), não o link.
+
+Sintoma para reconhecer: o `--check` acha o modelo e o aplicativo em execução não.

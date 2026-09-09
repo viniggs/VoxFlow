@@ -88,3 +88,21 @@ Data: 2026-09-09
   minha tela?"* — ela não vai lembrar, porque o turno com imagem cai numa sessão
   diferente da conversa por voz. A união depende de uma autorização de escrita no banco
   do Hermes.
+
+
+---
+
+# VoxFlow 0.8.2 — A voz local de volta
+
+Data: 2026-09-09
+
+- [ ] Ajustes → Hermes → Provider TTS: escolher **Kokoro**, salvar e reiniciar o VoxFlow.
+- [ ] Falar com a Friday e confirmar que **ela fala com a voz local**, sem erro no painel.
+- [ ] Confirmar no log que aparece `kokoro_model_materialized` uma vez e depois
+  `kokoro_engine_ready` apontando para `%LOCALAPPDATA%\VoxFlow\models\kokoro`.
+- [ ] Conferir que a pasta acima tem `onnx\model.onnx` com cerca de 325 MB — é um
+  hardlink, então o disco **não** perde 325 MB.
+- [ ] Testar também **Windows (offline)** e voltar para **Edge**, confirmando que os três
+  falam.
+- [ ] **Salvar configurações enquanto ela fala** e confirmar que a fala para e o painel
+  volta a **ouvindo**, em vez de ficar preso em "falando".

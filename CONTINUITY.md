@@ -1,9 +1,9 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-08
-Versão: 0.8.1
+Versão: 0.8.2
 Fase concluída no código: Fase 5, aguardando aceite manual
-Instalador mais recente gerado: 0.8.1 (`releases/fase-5/0.8.1/`)
+Instalador mais recente gerado: 0.8.2 (`releases/fase-5/0.8.2/`)
 O usuário pediu para juntar tudo num teste só: a 0.8.0 carrega a Fase 5 e também
 os itens ainda não aceitos de 0.7.13 a 0.7.16.
 
@@ -1553,3 +1553,76 @@ com `mss`, e o foco da janela precisou ser forçado por `ShowWindow`.
 `src/voxflow/ui/settings.py`, `README.md`, `docs/FASE_5_CHECKLIST_ACEITE.md`.
 
 Validação: Ruff aprovado, 283 testes aprovados, e as medições acima contra o gateway real.
+
+
+## 0.8.2 — O Kokoro parou de achar o próprio modelo (2026-09-09)
+
+O usuário relatou, com razão e com raiva, que a voz local tinha parado. O log dizia:
+
+```
+tts_failed error_type=FileNotFoundError
+error=Modelo do Kokoro nao encontrado. Baixe onnx/model.onnx e voices.bin ...
+```
+
+39 vezes. Só o Kokoro: SAPI e OpenAI nunca registraram erro nenhum.
+
+### Não foi mudança de código
+
+`git log` entre a 0.7.16 e a 0.8.1 não toca `synthesizers.py`, `models.py`, `fsprobe.py`
+nem `voices.py`. O que mudou foi a máquina responder diferente para a mesma pergunta.
+
+### A prova de que a pergunta era a errada
+
+O `--check` do **mesmo executável instalado** encontrou o modelo às 01:38 e às 02:01,
+enquanto o aplicativo em execução falhava às 01:39 e às 01:58. Mesmo binário, mesma
+máquina, minutos de diferença.
+
+A diferença é o link. `onnx/model.onnx` no cache do HuggingFace é um **link simbólico**
+para `blobs`, e o aplicativo instalado nem sempre pode atravessá-lo — o Windows responde
+448. `fsprobe.is_file` engole esse erro e responde "não", como deve, e o modelo presente
+vira modelo ausente. **Esta é a terceira vez que este projeto tropeça no mesmo link**: a
+Fase 2 materializou o Whisper por isso, a 0.7.10 caiu nele em `models.py`, e o Kokoro
+continuava lendo direto do cache.
+
+### A correção
+
+- `_physical()` responde qual é o arquivo real por trás do link, e a sondagem passa a
+  perguntar por ele em vez de pelo link.
+- `_out_of_the_cache()` tira o modelo do cache antes de carregar: **hardlink** para
+  `%LOCALAPPDATA%\VoxFlow\models\kokoro`, mantendo os nomes, sem duplicar os 325 MB.
+  É o mesmo remédio que o Whisper usa desde a Fase 2.
+
+Medido depois: `model.onnx` de 325.532.232 bytes, físico, fora do cache, e a síntese
+voltou — 2,2 s na primeira frase, com a carga do modelo.
+
+`tests/test_kokoro.py::test_a_linked_model_is_still_found` monta um cache com link e
+simula o processo que não consegue segui-lo. Removendo a correção, ele reprova.
+
+### Arquivos alterados
+
+`src/voxflow/hermes/synthesizers.py`, `tests/test_kokoro.py`.
+
+Validação: Ruff aprovado, 284 testes aprovados, Kokoro sintetizando de verdade.
+
+### E o travamento em "falando", que era outro defeito
+
+O usuário mostrou o painel parado em **FALANDO · FALE PARA INTERROMPER** por dez minutos.
+O log dá a hora exata:
+
+```
+01:59:51  tts_sentence_completed              (ela falando)
+01:59:53  tts_speaker_ready EdgeSynthesizer
+01:59:53  ui_event 'Configuração salva com sucesso'
+```
+
+Ele salvou as configurações **enquanto ela falava**. `_activate_config` troca o objeto de
+voz quando a seção `hermes` muda: fecha o antigo e cria outro. O aviso de "terminei" que
+a máquina de estados esperava pertencia ao objeto destruído, e nunca chegou. Sem ele o
+estado fica em `SPEAKING` para sempre, e a única saída era fechar a Friday.
+
+O mesmo buraco engolia o caso do Kokoro quebrado: se toda frase falha na síntese,
+`_on_tts_error` só escrevia uma mensagem de status e ninguém devolvia o turno.
+
+`_recover_from_lost_voice()` cobre os dois: estando em `SPEAKING` ou `THINKING`, volta a
+ouvir. Se uma frase seguinte for sintetizada, a reprodução recoloca o estado em falando
+sozinha. Três testes cobrem isso, e reprovam com a correção removida.

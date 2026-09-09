@@ -7,6 +7,7 @@ next ``uv sync`` would have removed.
 
 from __future__ import annotations
 
+import os
 import tomllib
 from pathlib import Path
 
@@ -225,3 +226,46 @@ def test_without_the_setting_a_model_outside_the_caches_stays_invisible(
     entry = _kokoro_entry()
     assert entry.status == NEEDS_SETUP
     assert entry.suffix == "  (falta configurar)"
+
+
+# --- the cache link must not make a present model look missing ----------------------
+
+
+def test_a_linked_model_is_still_found(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The HuggingFace cache links snapshots into `blobs`.
+
+    The installed application cannot always follow those links — Windows answers 448 —
+    and `is_file` reports "no" for a model that is present. That is how Kokoro came to
+    say it was missing on a machine that had it. The probe asks about the real file now.
+    """
+
+    import voxflow.models
+
+    blobs = tmp_path / "blobs"
+    blobs.mkdir()
+    real_model = blobs / "abc123"
+    real_model.write_bytes(b"onnx")
+    folder = tmp_path / KOKORO_REPO / "snapshots" / "snap"
+    (folder / "onnx").mkdir(parents=True)
+    (folder / "voices.bin").write_bytes(b"voices")
+    monkeypatch.setattr(voxflow.models, "default_roots", lambda: [tmp_path])
+
+    link = folder / "onnx" / "model.onnx"
+    try:
+        link.symlink_to(real_model)
+    except OSError:  # pragma: no cover - needs developer mode or admin on Windows
+        pytest.skip("esta máquina não deixa criar link simbólico sem privilégio")
+
+    # Simulate the installed application: following the link raises, as it does there.
+    import voxflow.hermes.synthesizers as synthesizers
+
+    real_is_file = synthesizers.is_file
+
+    def refuses_links(path: Path) -> bool:
+        if os.path.islink(str(path)):
+            return False
+        return real_is_file(path)
+
+    monkeypatch.setattr(synthesizers, "is_file", refuses_links)
+
+    assert KokoroSynthesizer.find_model() is not None

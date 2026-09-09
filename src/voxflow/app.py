@@ -290,8 +290,12 @@ class VoxFlowController(QObject):
                 restore_clipboard=config.inject.restore_clipboard
             )
         if old_config.hermes != config.hermes:
+            was_speaking = self._hermes_state is HermesState.SPEAKING
             self._speaker.close()
             self._speaker = self._create_speaker(config)
+            if was_speaking:
+                logger.info("hermes_speaker_replaced_while_speaking")
+                self._recover_from_lost_voice("voz trocada; pode falar")
         self._hermes_client = self._create_hermes_client(config)
         if old_config.audio != config.audio:
             self._vad = self._create_vad(config)
@@ -1018,6 +1022,19 @@ class VoxFlowController(QObject):
     @Slot(str)
     def _on_tts_error(self, message: str) -> None:
         self._signals.hermes_gateway_status.emit(message)
+        self._recover_from_lost_voice(message)
+
+    def _recover_from_lost_voice(self, message: str) -> None:
+        """Hand the turn back when the voice can no longer finish it.
+
+        Two ways she used to get stranded on "falando" with no way out but closing her:
+        a synthesizer that fails every sentence, and a speaker replaced mid-sentence by
+        a settings save — the replacement takes the "finished" signal with it. If a
+        later sentence does play, playback puts the state back to speaking by itself.
+        """
+
+        if self._hermes_state in {HermesState.SPEAKING, HermesState.THINKING}:
+            self._enter_hermes_listening(message)
 
     def _hermes_failure(self, error: Exception) -> None:
         logger.error("hermes_turn_failed error_type={} error={!s}", type(error).__name__, error)
