@@ -36,7 +36,7 @@ aqui significa apenas o preview na UI: nunca injete parciais no Notepad, Chrome 
 aplicativo. A injeção final ocorre somente ao soltar o atalho. Preserve essa visibilidade em
 todas as fases. Não faça auditorias repetitivas: o limite GPT em janelas de cinco horas é crítico.
 
-A versão atual é **0.8.9**/Fase 5. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
+A versão atual é **0.9.0**/Fase 7. A base veio da 0.7.0: modo Hermes em `F9`, VAD,
 SSE, painel de resposta, TTS por sentença, barge-in, half-duplex e controles de
 health/start/stop. Desde então mudaram coisas que as seções no fim deste arquivo
 detalham — leia-as antes de confiar em qualquer parágrafo anterior a elas.
@@ -458,3 +458,16 @@ O plugin escreve o raciocínio de **todas** as iterações, e a Friday continua 
 depois de responder: medido, 23 s de deltas chegando depois de a fala terminar. O painel
 só mostra raciocínio enquanto o turno está em voo (`begin_turn` até `listening`/`off`).
 Se for mexer nisso, lembre que pensamento e fala se sobrepõem de propósito.
+
+
+## Fase 6 foi dispensada, e a 7 está no código (0.9.0)
+
+O usuário **não quer modelo local** para a limpeza, então a Fase 6 (Ollama) não será
+feita. O ditado já é offline: Whisper local desde a Fase 1, vozes locais desde a 0.8.x.
+A limpeza está **desligada no config dele de propósito** — a transcrição sai boa sem ela.
+
+Fase 7: o executável agora carrega o recurso de versão do Windows, gerado pelo
+`voxflow.spec` a partir de `__version__`. O atualizador é manual e não consulta nada
+sozinho: `general.update_source` é uma pasta ou um endereço com `voxflow-updates.json`,
+vazio significa nunca olhar. Compare versões com `parse_version`, nunca como texto —
+`0.8.10` é maior que `0.8.9`.

@@ -25,6 +25,10 @@ class GeneralConfig(StrictModel):
     #: Requirements the user has already seen and chosen to live without. The setup
     #: assistant stays quiet unless something new is missing.
     setup_acknowledged: list[str] = Field(default_factory=list)
+    #: Where to look for a newer VoxFlow: a folder (a build machine's `releases` tree, a
+    #: shared drive) or an address serving `voxflow-updates.json`. Empty means never
+    #: look — nothing here phones home on its own.
+    update_source: str = ""
 
 
 class HotkeysConfig(StrictModel):

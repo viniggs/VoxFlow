@@ -75,5 +75,11 @@ Invoke-Checked {
     & $InnoCompiler "/DMyAppVersion=$Version" "/DMyAppPhase=$Phase" "/DBuildRoot=$(Join-Path $ProjectRoot 'dist\VoxFlow')" "/DOutputRoot=$ReleaseDir" (Join-Path $ProjectRoot 'packaging\setup.iss')
 } 'O Inno Setup falhou.'
 
+# A folder lists itself; an address cannot. The manifest lets the same releases tree be
+# served over HTTP as the update source without rewriting anything inside it.
+Invoke-Checked {
+    uv run --no-sync python -c "from pathlib import Path; from voxflow.updates import write_manifest; print(write_manifest(Path(r'$(Join-Path $ProjectRoot 'releases')')))"
+} 'Falha ao escrever o manifesto de atualizações.'
+
 Write-Output "Código: $SourceZip"
 Write-Output "Instalador: $(Join-Path $ReleaseDir "VoxFlow-$Version-fase-$Phase-setup.exe")"

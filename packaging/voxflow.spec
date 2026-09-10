@@ -7,6 +7,50 @@ from PyInstaller.utils.hooks import (
 
 project_root = Path(SPECPATH).parent
 
+
+def _version() -> str:
+    """The version, read from the package rather than written here twice."""
+
+    source = (project_root / "src" / "voxflow" / "__init__.py").read_text(encoding="utf-8")
+    for line in source.splitlines():
+        if line.startswith("__version__"):
+            return line.split("=", 1)[1].strip().strip('"').strip("'")
+    raise SystemExit("não achei __version__ em src/voxflow/__init__.py")
+
+
+def _version_resource() -> str:
+    """Write the Windows version resource, so Properties -> Details is not blank.
+
+    Without it the executable carries no version, product or publisher at all, and
+    there is no way to tell two builds apart from Explorer — which matters now that
+    an update is something the user is asked to install.
+    """
+
+    numbers = [int(part) for part in _version().split(".")][:4]
+    numbers += [0] * (4 - len(numbers))
+    quad = ", ".join(str(part) for part in numbers)
+    text = f"""VSVersionInfo(
+  ffi=FixedFileInfo(filevers=({quad}), prodvers=({quad}), mask=0x3f, flags=0x0,
+                    OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
+  kids=[
+    StringFileInfo([StringTable('040904B0', [
+      StringStruct('CompanyName', 'Vini'),
+      StringStruct('FileDescription', 'VoxFlow — ditado universal e estudo por voz'),
+      StringStruct('FileVersion', '{_version()}'),
+      StringStruct('InternalName', 'VoxFlow'),
+      StringStruct('OriginalFilename', 'VoxFlow.exe'),
+      StringStruct('ProductName', 'VoxFlow'),
+      StringStruct('ProductVersion', '{_version()}'),
+    ])]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])]),
+  ],
+)
+"""
+    written = project_root / "build" / "version_info.txt"
+    written.parent.mkdir(parents=True, exist_ok=True)
+    written.write_text(text, encoding="utf-8")
+    return str(written)
+
 analysis = Analysis(
     [str(project_root / "src" / "voxflow" / "main.py")],
     pathex=[str(project_root / "src")],
@@ -62,6 +106,7 @@ exe = EXE(
     upx=False,
     console=False,
     icon=str(project_root / "assets" / "icon.ico"),
+    version=_version_resource(),
 )
 bundle = COLLECT(
     exe,

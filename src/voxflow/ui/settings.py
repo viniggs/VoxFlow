@@ -53,6 +53,8 @@ class SettingsWindow(CosmicPanel):
     #: Carries the exception, or None. Emitted from the fetching thread, so the
     #: interface is only touched back on the Qt thread.
     voices_refreshed = Signal(object)
+    #: ``(update or None, message)`` from the update check, for the same reason.
+    update_checked = Signal(object, str)
 
     def __init__(self, config: AppConfig, paths: AppPaths) -> None:
         super().__init__(radius=20.0, density=0.5, brightness=0.5)
@@ -61,6 +63,7 @@ class SettingsWindow(CosmicPanel):
         self.setWindowTitle("VoxFlow — Ajustes")
         self.resize(1040, 820)
         self.voices_refreshed.connect(self._on_voices_refreshed)
+        self.update_checked.connect(self._on_update_checked)
         self._tabs = QTabWidget()
         self._build_general_tab()
         self._build_audio_tab()
@@ -133,6 +136,41 @@ class SettingsWindow(CosmicPanel):
         form.addRow("Atalhos:", QLabel("Configuráveis na aba Atalhos"))
         form.addRow("Inicialização:", self._autostart)
         form.addRow("Sons:", self._sounds)
+
+        from voxflow import __version__
+
+        self._update_source = QLineEdit(self._config.general.update_source)
+        self._update_source.setPlaceholderText(
+            "pasta com os instaladores, ou endereço com voxflow-updates.json"
+        )
+        pick_source = QPushButton("Procurar…")
+        pick_source.setProperty("role", "ghost")
+        pick_source.clicked.connect(self._pick_update_source)
+        source_row = QWidget()
+        source_layout = QHBoxLayout(source_row)
+        source_layout.setContentsMargins(0, 0, 0, 0)
+        source_layout.addWidget(self._update_source, 1)
+        source_layout.addWidget(pick_source)
+        self._check_updates = QPushButton("Verificar agora")
+        self._check_updates.setProperty("role", "ghost")
+        self._check_updates.clicked.connect(self._start_update_check)
+        self._install_update = QPushButton("Instalar")
+        self._install_update.setProperty("role", "primary")
+        self._install_update.setEnabled(False)
+        self._install_update.clicked.connect(self._install_found_update)
+        self._found_update: object = None
+        self._update_status = QLabel("Nunca verificado.")
+        self._update_status.setWordWrap(True)
+        buttons = QWidget()
+        buttons_layout = QHBoxLayout(buttons)
+        buttons_layout.setContentsMargins(0, 0, 0, 0)
+        buttons_layout.addWidget(self._check_updates)
+        buttons_layout.addWidget(self._install_update)
+        buttons_layout.addStretch(1)
+        form.addRow("Versão instalada:", QLabel(__version__))
+        form.addRow("Origem de atualizações:", source_row)
+        form.addRow("Atualizações:", buttons)
+        form.addRow("", self._update_status)
         self._tabs.addTab(tab, "Geral")
 
     def _build_audio_tab(self) -> None:
@@ -614,6 +652,57 @@ class SettingsWindow(CosmicPanel):
         self._fill_voices(str(self._tts_provider.currentData() or "edge"))
         self._result.setText(f"{len(edge_catalogue.read_cache())} vozes do Edge carregadas.")
 
+    def _pick_update_source(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+
+        chosen = QFileDialog.getExistingDirectory(
+            self, "Pasta com os instaladores do VoxFlow", self._update_source.text().strip()
+        )
+        if chosen:
+            self._update_source.setText(chosen)
+            self.save(show_dialog=False)
+
+    def _start_update_check(self) -> None:
+        """Ask the source, off the interface thread.
+
+        A folder answers instantly, but an address has a ten second timeout, and that
+        would be ten seconds of frozen window.
+        """
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        from voxflow.updates import look
+
+        source = self._update_source.text().strip()
+        self._check_updates.setEnabled(False)
+        self._check_updates.setText("Verificando…")
+        self._update_status.setText("Consultando a origem…")
+        pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="voxflow-updates")
+        future = pool.submit(look, source)
+        future.add_done_callback(self._report_update_check)
+        pool.shutdown(wait=False)
+
+    def _report_update_check(self, future: object) -> None:
+        try:
+            found, message = future.result()  # type: ignore[attr-defined]
+        except Exception as exc:  # noqa: BLE001 - reported, never raised at the interface
+            found, message = None, f"Falha ao verificar: {type(exc).__name__}"
+        self.update_checked.emit(found, message)
+
+    def _on_update_checked(self, found: object, message: str) -> None:
+        self._check_updates.setEnabled(True)
+        self._check_updates.setText("Verificar agora")
+        self._found_update = found
+        self._install_update.setEnabled(found is not None)
+        self._update_status.setText(message)
+
+    def _install_found_update(self) -> None:
+        from voxflow.updates import install
+
+        if self._found_update is None:
+            return
+        self._update_status.setText(install(self._found_update))  # type: ignore[arg-type]
+
     def _pick_chatterbox_voice(self) -> None:
         """Chatterbox imitates a recording, so the voice is chosen as a file."""
 
@@ -701,6 +790,7 @@ class SettingsWindow(CosmicPanel):
                 "language": self._language.currentText(),
                 "autostart": self._autostart.isChecked(),
                 "sounds": self._sounds.isChecked(),
+                "update_source": self._update_source.text().strip(),
             }
         )
         audio = self._config.audio.model_copy(

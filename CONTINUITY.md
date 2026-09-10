@@ -1,9 +1,9 @@
 # VoxFlow — Continuidade do projeto
 
 Atualizado em: 2026-09-08
-Versão: 0.8.9
-Fase concluída no código: Fase 5, aguardando aceite manual
-Instalador mais recente gerado: 0.8.9 (`releases/fase-5/0.8.9/`)
+Versão: 0.9.0
+Fase concluída no código: Fase 7, aguardando aceite manual
+Instalador mais recente gerado: 0.9.0 (`releases/fase-7/0.9.0/`)
 O usuário pediu para juntar tudo num teste só: a 0.8.0 carrega a Fase 5 e também
 os itens ainda não aceitos de 0.7.13 a 0.7.16.
 
@@ -1902,3 +1902,49 @@ Removida a correção, três dos seis reprovam.
 ### Arquivos alterados
 
 `src/voxflow/ui/conversation.py`, `tests/test_reasoning_display.py` (novo).
+
+
+## 0.9.0 — Fase 7: versão no executável e atualizador manual (2026-09-10)
+
+O usuário dispensou o modelo local, então a Fase 6 virou verificação em vez de fase: o
+ditado já era offline desde a Fase 1 (Whisper local) e as vozes locais chegaram na 0.8.x.
+Só a limpeza depende de rede, e ele a mantém **desligada de propósito** — a transcrição
+sai boa sem ela. Fica anotado para o fim do projeto, se um dia incomodar.
+
+### O executável não tinha versão nenhuma
+
+Propriedades → Detalhes vinha inteiramente em branco: sem versão, produto ou fabricante.
+Duas builds eram indistinguíveis pelo Explorer, o que passa a importar agora que existe
+um atualizador dizendo "instale a 0.9.0".
+
+O `voxflow.spec` gera o recurso de versão do Windows a partir de `__version__` — lido do
+pacote, não escrito à mão num segundo lugar que envelhece sozinho.
+
+### O atualizador é manual de propósito
+
+Nada consulta nada sozinho. `general.update_source` aponta para uma **pasta** (a árvore
+`releases` de quem compila, um drive compartilhado, uma pasta sincronizada) ou um
+**endereço** servindo `voxflow-updates.json`. Vazio significa nunca olhar.
+
+Aba Geral: versão instalada, a origem com seletor de pasta, **Verificar agora** e
+**Instalar**. A consulta roda fora da thread do Qt — uma pasta responde na hora, mas um
+endereço tem dez segundos de timeout, e isso seria dez segundos de janela congelada.
+
+Comparação por números, não por texto: `0.8.10` é maior que `0.8.9`, e este projeto já
+passou de nove correções dentro de uma fase mais de uma vez.
+
+`write_manifest()` descreve a pasta de releases para quem for servi-la por HTTP; o
+`build-release.ps1` a escreve a cada build. Uma pasta se lista sozinha, um endereço não.
+
+### Verificado
+
+Na janela real: origem salva, verificação fora da thread, "Você já está na versão mais
+recente (0.8.9)" e o botão Instalar corretamente desabilitado. Onze testes cobrem
+comparação de versões, pasta, manifesto, endereço, origem vazia, origem inexistente e
+origem que recusa.
+
+### Arquivos alterados
+
+`src/voxflow/updates.py` (novo), `src/voxflow/config.py`, `src/voxflow/ui/settings.py`,
+`packaging/voxflow.spec`, `packaging/setup.iss`, `scripts/build-release.ps1`,
+`tests/test_updates.py` (novo).
