@@ -1,6 +1,6 @@
 # VoxFlow
 
-VoxFlow será um aplicativo Windows de ditado universal e estudo por voz integrado ao Hermes.
+VoxFlow será um aplicativo Windows de ditado universal e estudo por voz integrado ao Hermes Agent.
 
 ## Estado atual
 
